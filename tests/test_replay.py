@@ -22,7 +22,8 @@ def test_replay_buy_intent_closes_on_target(tmp_path):
     ticks = [
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
         Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 101),
-        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 105),
+        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 9, 3, tzinfo=timezone.utc), 105),
     ]
     state = replay_buy_intents(
         ticks,

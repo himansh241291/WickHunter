@@ -56,7 +56,7 @@ def test_slippage_can_prevent_confirmation_fill():
 
 
 def test_confirmation_candle_is_not_used_for_exit():
-    data = bars((100.5, 100.8, 99.0, 99.5), (99.5, 101.5, 99.2, 101.2), (101.2, 106.0, 98.0, 105.0), (105.0, 105.5, 104.0, 105.2))
+    data = bars((100.5, 100.8, 99.0, 99.5), (99.5, 101.5, 99.2, 101.2), (101.2, 106.0, 98.0, 105.0), (105.0, 105.5, 98.5, 104.0))
     result = WickHunterBacktester().run({"2026-01-02": data}, levels())
     assert result.total_trades == 1
     assert result.trades[0].result == "LOSS"

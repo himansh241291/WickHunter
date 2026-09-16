@@ -90,11 +90,7 @@ class BacktestResult:
 
 
 class WickHunterBacktester:
-    """Run one independent long-only engine per trading session.
-
-    OHLC exits begin on the candle after entry because bar data cannot prove
-    whether a stop or target was reached before or after an intrabar entry.
-    """
+    """Run one independent long-only engine per trading session."""
 
     def __init__(self, config: Optional[BacktestConfig] = None):
         self.config = config or BacktestConfig()
@@ -139,7 +135,7 @@ class WickHunterBacktester:
             pnl=pnl,
             r_multiple=pnl / risk_cash if risk_cash else 0.0,
         ))
-        self._audit(result, session, candle, "EXIT", result=exit_result, price=executable_exit,
+        self._audit(result, session, candle, "EXIT", outcome=exit_result, price=executable_exit,
                     gross_pnl=gross_pnl, commission=commission, pnl=pnl)
         return pnl
 

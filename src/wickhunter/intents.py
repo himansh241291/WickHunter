@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from typing import Iterable
 
 from .engine import EngineConfig, WickHunterEngine
@@ -13,17 +14,20 @@ class BuyIntent:
     """Broker-neutral approved BUY intent produced by the strategy layer."""
 
     session: str
-    time: object
+    time: datetime
     trigger: float
     stop: float
     target: float
     risk_fraction: float
     spread: float
-    signal_time: object
-    confirmation_time: object
+    signal_time: datetime
+    confirmation_time: datetime
 
     def as_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        for key in ("time", "signal_time", "confirmation_time"):
+            data[key] = data[key].isoformat()
+        return data
 
 
 def generate_buy_intents(

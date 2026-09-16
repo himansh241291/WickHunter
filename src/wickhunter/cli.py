@@ -12,6 +12,7 @@ from .intents import generate_buy_intents, intents_to_jsonable
 from .metrics import summarize
 from .research import sensitivity_cases, run_cases
 from .replay import load_ticks, replay_buy_intents
+from .risk import RiskLimits
 from .validation import validate_m1
 from .walkforward import make_rolling_windows, run_walk_forward
 
@@ -69,6 +70,12 @@ def build_parser():
     replay.add_argument("--ledger", default="reports/paper-ledger.jsonl")
     replay.add_argument("--starting-equity", type=float, default=100_000.0)
     replay.add_argument("--risk-fraction", type=float, default=0.01)
+    replay.add_argument("--max-risk-fraction", type=float, default=0.01)
+    replay.add_argument("--max-trades-per-day", type=int, default=1)
+    replay.add_argument("--max-daily-loss-fraction", type=float, default=None)
+    replay.add_argument("--max-consecutive-losses", type=int, default=None)
+    replay.add_argument("--max-spread", type=float, default=None)
+    replay.add_argument("--max-slippage", type=float, default=None)
     return parser
 
 
@@ -167,8 +174,22 @@ def run_paper_replay(args):
     if not isinstance(intents, list):
         raise ValueError("intents JSON must be an array")
     ledger = __import__("wickhunter.ledger", fromlist=["TradeLedger"]).TradeLedger(args.ledger)
-    state = replay_buy_intents(ticks, intents, starting_equity=args.starting_equity,
-        risk_fraction=args.risk_fraction, ledger=ledger)
+    limits = RiskLimits(
+        max_risk_fraction=args.max_risk_fraction,
+        max_trades_per_day=args.max_trades_per_day,
+        max_daily_loss_fraction=args.max_daily_loss_fraction,
+        max_consecutive_losses=args.max_consecutive_losses,
+        max_spread=args.max_spread,
+        max_slippage=args.max_slippage,
+    )
+    state = replay_buy_intents(
+        ticks,
+        intents,
+        starting_equity=args.starting_equity,
+        risk_fraction=args.risk_fraction,
+        risk_limits=limits,
+        ledger=ledger,
+    )
     print(json.dumps({"starting_equity": args.starting_equity, "equity": state.equity,
                       "net_pnl": state.equity - args.starting_equity,
                       "trades_today": state.trades_today,

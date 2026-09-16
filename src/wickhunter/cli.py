@@ -77,6 +77,7 @@ def build_parser():
     replay.add_argument("--max-consecutive-losses", type=int, default=None)
     replay.add_argument("--max-spread", type=float, default=None)
     replay.add_argument("--max-slippage", type=float, default=None)
+    replay.add_argument("--resume", action="store_true", help="recover account/position from the existing ledger")
     return parser
 
 
@@ -192,6 +193,7 @@ def run_paper_replay(args):
         risk_limits=limits,
         ledger=ledger,
         timezone_name=args.timezone,
+        resume=args.resume,
     )
     print(json.dumps({"starting_equity": args.starting_equity, "equity": state.equity,
                       "net_pnl": state.equity - args.starting_equity,

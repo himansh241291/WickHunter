@@ -50,6 +50,8 @@ def recover_risk_state(
     current_day_started = False
 
     for item in events:
+        if item.time > as_of:
+            raise ValueError("ledger contains future event relative to as_of")
         if item.event == "BUY_FILLED":
             if item.time.date() == as_of.date():
                 if not current_day_started:
@@ -64,8 +66,6 @@ def recover_risk_state(
                     current_day_started = True
                 daily_pnl += pnl
             equity += pnl
-            if item.time.date() != as_of.date() and item.time.date() > as_of.date():
-                raise ValueError("ledger contains future event relative to as_of")
             if item.time.date() != as_of.date():
                 day_starting_equity = equity
             if pnl < 0:

@@ -72,6 +72,43 @@ def test_replay_does_not_fill_when_trigger_is_never_reached():
     assert state.equity == state.starting_equity
 
 
+def test_replay_expired_intent_cannot_fill_on_later_tick():
+    ticks = [
+        Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 9, 3, tzinfo=timezone.utc), 105),
+    ]
+    state = replay_buy_intents(
+        ticks,
+        [{
+            "time": "2026-01-02T09:00:00+00:00",
+            "trigger": 101,
+            "stop": 99,
+            "target": 105,
+            "expires_at": "2026-01-02T09:02:00+00:00",
+        }],
+    )
+    assert state.trades_today == 0
+    assert state.equity == state.starting_equity
+
+
+def test_replay_final_open_position_is_liquidated():
+    ticks = [
+        Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 102),
+    ]
+    ledger = TradeLedger("/tmp/wickhunter-final-replay-ledger.jsonl")
+    state = replay_buy_intents(
+        ticks,
+        [{"time": "2026-01-02T09:00:00+00:00", "trigger": 101, "stop": 99, "target": 105}],
+        ledger=ledger,
+    )
+    assert state.trades_today == 1
+    assert ledger.snapshot()["open_position"] is None
+
+
 def test_replay_resets_daily_trade_limit_at_session_boundary():
     ticks = [
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),

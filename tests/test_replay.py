@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from wickhunter.ledger import TradeLedger
 from wickhunter.replay import load_ticks, replay_buy_intents
 from wickhunter.tick import Tick
 
@@ -16,7 +17,8 @@ def test_load_ticks_orders_input(tmp_path):
     assert ticks[0].price == 101
 
 
-def test_replay_buy_intent_closes_on_target():
+def test_replay_buy_intent_closes_on_target(tmp_path):
+    ledger = TradeLedger(tmp_path / "ledger.jsonl")
     ticks = [
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
         Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 101),
@@ -25,6 +27,8 @@ def test_replay_buy_intent_closes_on_target():
     state = replay_buy_intents(
         ticks,
         [{"time": "2026-01-02T09:01:00+00:00", "trigger": 101, "stop": 99, "target": 105}],
+        ledger=ledger,
     )
     assert state.equity > state.starting_equity
     assert state.trades_today == 1
+    assert ledger.snapshot()["open_position"] is None

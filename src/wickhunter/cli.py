@@ -10,6 +10,7 @@ from .backtest import BacktestConfig, WickHunterBacktester
 from .data import load_m1_csv, prepare_sessions
 from .metrics import summarize
 from .research import sensitivity_cases, run_cases
+from .replay import load_ticks, replay_buy_intents
 from .validation import validate_m1
 from .walkforward import make_rolling_windows, run_walk_forward
 
@@ -52,6 +53,13 @@ def build_parser():
     research.add_argument("--train-size", type=int, default=0)
     research.add_argument("--test-size", type=int, default=0)
     research.add_argument("--step", type=int, default=None)
+
+    replay = sub.add_parser("paper-replay", help="replay approved BUY intents against ordered ticks")
+    replay.add_argument("--ticks", required=True, help="tick CSV with time,price columns")
+    replay.add_argument("--intents", required=True, help="JSON array of approved BUY intents")
+    replay.add_argument("--ledger", default="reports/paper-ledger.jsonl")
+    replay.add_argument("--starting-equity", type=float, default=100_000.0)
+    replay.add_argument("--risk-fraction", type=float, default=0.01)
     return parser
 
 
@@ -75,13 +83,11 @@ def _floats(value):
 def run_backtest(args):
     candles = load_m1_csv(args.data)
     sessions, levels = prepare_sessions(candles, timezone_name=args.timezone)
-    config = BacktestConfig(
-        starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
+    config = BacktestConfig(starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
         minimum_reward_risk=args.minimum_rr, stop_buffer=args.stop_buffer,
         max_trades_per_day=args.max_trades_per_day, entry_slippage=args.entry_slippage,
         exit_slippage=args.exit_slippage, commission_per_unit=args.commission_per_unit,
-        liquidate_at_session_end=not args.no_session_liquidation,
-    )
+        liquidate_at_session_end=not args.no_session_liquidation)
     result = WickHunterBacktester(config).run(sessions, levels)
     metrics = summarize(result)
     output = Path(args.output_dir)
@@ -105,12 +111,10 @@ def run_validate(args):
 def run_research(args):
     candles = load_m1_csv(args.data)
     sessions, levels = prepare_sessions(candles, timezone_name=args.timezone)
-    cases = sensitivity_cases(
-        starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
+    cases = sensitivity_cases(starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
         minimum_rr_values=_floats(args.rr_values), stop_buffers=_floats(args.stop_buffers),
         slippages=_floats(args.entry_slippages), exit_slippages=_floats(args.exit_slippages),
-        commissions_per_unit=_floats(args.commissions),
-    )
+        commissions_per_unit=_floats(args.commissions))
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     if args.train_size and args.test_size:
@@ -130,11 +134,27 @@ def run_research(args):
     return 0
 
 
+def run_paper_replay(args):
+    ticks = load_ticks(args.ticks)
+    intents = json.loads(Path(args.intents).read_text(encoding="utf-8"))
+    if not isinstance(intents, list):
+        raise ValueError("intents JSON must be an array")
+    ledger = __import__("wickhunter.ledger", fromlist=["TradeLedger"]).TradeLedger(args.ledger)
+    state = replay_buy_intents(ticks, intents, starting_equity=args.starting_equity,
+        risk_fraction=args.risk_fraction, ledger=ledger)
+    print(json.dumps({"starting_equity": args.starting_equity, "equity": state.equity,
+                      "net_pnl": state.equity - args.starting_equity,
+                      "trades_today": state.trades_today,
+                      "consecutive_losses": state.consecutive_losses}, indent=2, allow_nan=False))
+    return 0
+
+
 def main():
     args = build_parser().parse_args()
     if args.command == "backtest": return run_backtest(args)
     if args.command == "validate": return run_validate(args)
     if args.command == "research": return run_research(args)
+    if args.command == "paper-replay": return run_paper_replay(args)
     return 2
 
 

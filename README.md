@@ -124,6 +124,19 @@ wickhunter paper-replay \
   --ledger reports/paper-ledger.jsonl
 ```
 
+After a process restart, resume from the existing durable ledger explicitly:
+
+```bash
+wickhunter paper-replay \
+  --ticks data/ticks-from-restart.csv \
+  --intents data/buy-intents.json \
+  --timezone Asia/Kolkata \
+  --ledger reports/paper-ledger.jsonl \
+  --resume
+```
+
+Resume mode reconstructs account/risk state and an open BUY position from the ledger, ignores already-processed intent/tick timestamps, and fails closed if the supplied replay stream cannot safely reconcile the persisted position.
+
 The tick CSV requires `time,price`. Intent JSON is an array containing `time`, `trigger`, `stop`, and `target`, with optional `risk_fraction`, `spread`, and `expires_at`. The replay harness waits for the **first strictly later** ordered tick before expiry that reaches the trigger, and uses the observed tick price for the fill. It does not generate signals.
 
 Paper replay risk controls:
@@ -161,4 +174,4 @@ Historical performance is not treated as proof of future profitability. The rese
 
 ## Status
 
-The repository currently contains the deterministic strategy engine, session-aware M1 data pipeline, OHLC backtester, execution-cost model, audit ledger, dataset validation, fixed sensitivity research, rolling walk-forward evaluation, BUY-intent exporter, ordered-tick paper replay, risk guardrails, durable recovery state, and persistent kill switch. There is no live-trading default and no SELL-entry implementation.
+The repository currently contains the deterministic strategy engine, session-aware M1 data pipeline, OHLC backtester, execution-cost model, audit ledger, dataset validation, fixed sensitivity research, rolling walk-forward evaluation, BUY-intent exporter, ordered-tick paper replay, risk guardrails, durable recovery state, persistent kill switch, and explicit replay resume path. There is no live-trading default and no SELL-entry implementation.

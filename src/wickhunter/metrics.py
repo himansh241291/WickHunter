@@ -3,10 +3,11 @@
 from .backtest import BacktestResult
 
 
-def summarize(result: BacktestResult) -> dict[str, float]:
+def summarize(result: BacktestResult) -> dict:
     pnls = [trade.pnl for trade in result.trades]
     gross_profit = sum(p for p in pnls if p > 0)
     gross_loss = -sum(p for p in pnls if p < 0)
+
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p < 0]
 
@@ -25,15 +26,16 @@ def summarize(result: BacktestResult) -> dict[str, float]:
         else:
             consecutive_losses = 0
 
-    average_hold_minutes = 0.0
-    if result.trades:
-        durations = [
-            (trade.exit_time - trade.entry_time).total_seconds() / 60
-            for trade in result.trades
-            if hasattr(trade.exit_time, "__sub__")
-        ]
-        if durations:
-            average_hold_minutes = sum(durations) / len(durations)
+    durations = [
+        (trade.exit_time - trade.entry_time).total_seconds() / 60
+        for trade in result.trades
+        if hasattr(trade.exit_time, "__sub__")
+    ]
+    average_hold_minutes = sum(durations) / len(durations) if durations else 0.0
+
+    # None is JSON-safe and explicitly means the profit factor is undefined
+    # when there is no realized loss; Infinity is intentionally avoided.
+    profit_factor = gross_profit / gross_loss if gross_loss else None
 
     return {
         "starting_equity": result.starting_equity,
@@ -44,13 +46,18 @@ def summarize(result: BacktestResult) -> dict[str, float]:
         "losses": result.losses,
         "session_closes": result.session_closes,
         "win_rate": result.win_rate,
-        "profit_factor": gross_profit / gross_loss if gross_loss else float("inf") if gross_profit else 0.0,
+        "profit_factor": profit_factor,
         "expectancy_per_trade": sum(pnls) / len(pnls) if pnls else 0.0,
         "average_win": sum(wins) / len(wins) if wins else 0.0,
         "average_loss": sum(losses) / len(losses) if losses else 0.0,
         "max_drawdown": max_drawdown,
         "max_consecutive_losses": max_consecutive_losses,
         "average_hold_minutes": average_hold_minutes,
+        "total_r": sum(trade.r_multiple for trade in result.trades),
+        "average_r": (
+            sum(trade.r_multiple for trade in result.trades) / len(result.trades)
+            if result.trades else 0.0
+        ),
         "rejections": len(result.rejected),
         "audit_events": len(result.audit),
     }

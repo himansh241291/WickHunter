@@ -31,8 +31,8 @@ def test_replay_buy_intent_closes_on_target(tmp_path):
     ticks = [
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
         Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 101),
-        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 101),
-        Tick(datetime(2026, 1, 2, 9, 3, tzinfo=timezone.utc), 105),
+        Tick(datetime(2026, 1, 2, 9, 1, 30, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 105),
     ]
     state = replay_buy_intents(
         ticks,
@@ -48,7 +48,8 @@ def test_replay_waits_for_trigger_and_uses_observed_gap_price():
     ticks = [
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
         Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 100.5),
-        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 101.25),
+        Tick(datetime(2026, 1, 2, 9, 1, 30, tzinfo=timezone.utc), 101.25),
+        Tick(datetime(2026, 1, 2, 9, 1, 45, tzinfo=timezone.utc), 102),
     ]
     state = replay_buy_intents(
         ticks,
@@ -96,8 +97,8 @@ def test_replay_final_open_position_is_liquidated(tmp_path):
     ticks = [
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
         Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 100),
-        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 101),
-        Tick(datetime(2026, 1, 2, 9, 3, tzinfo=timezone.utc), 102),
+        Tick(datetime(2026, 1, 2, 9, 1, 30, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 102),
     ]
     ledger = TradeLedger(tmp_path / "final-replay-ledger.jsonl")
     state = replay_buy_intents(
@@ -112,11 +113,11 @@ def test_replay_final_open_position_is_liquidated(tmp_path):
 def test_replay_resets_daily_trade_limit_at_session_boundary():
     ticks = [
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
-        Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 101),
-        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 105),
+        Tick(datetime(2026, 1, 2, 9, 0, 30, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 105),
         Tick(datetime(2026, 1, 3, 9, 0, tzinfo=timezone.utc), 100),
-        Tick(datetime(2026, 1, 3, 9, 1, tzinfo=timezone.utc), 102),
-        Tick(datetime(2026, 1, 3, 9, 2, tzinfo=timezone.utc), 106),
+        Tick(datetime(2026, 1, 3, 9, 0, 30, tzinfo=timezone.utc), 102),
+        Tick(datetime(2026, 1, 3, 9, 1, tzinfo=timezone.utc), 106),
     ]
     intents = [
         {"time": "2026-01-02T09:00:00+00:00", "trigger": 101, "stop": 99, "target": 105},

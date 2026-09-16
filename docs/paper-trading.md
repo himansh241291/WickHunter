@@ -11,11 +11,19 @@ WickHunter keeps strategy decisions separate from execution and account risk. Th
 5. Session-end liquidation is available as an explicit deterministic lifecycle rule.
 6. Gross P&L, round-trip commission, net P&L, equity, daily P&L, consecutive losses, and audit events are updated.
 
+## Ordered tick replay
+
+`paper-replay` treats an approved intent as an instruction that becomes eligible at its timestamp, not as an immediate fill. The first ordered tick at or above the BUY trigger fills the position. The observed tick price is used as the fill price before adverse entry slippage is applied, so a gap through the trigger is not silently filled at an unobserved price.
+
+Replay sessions are separated by the timestamp's local offset date. An open position is liquidated at the last tick of the previous date, daily trade/loss counters reset, and pending intents do not cross the session boundary.
+
 ## Durable state and kill switch
 
 `TradeLedger` stores append-only JSONL events and uses flush + `fsync` for each write. `TradeLedger.snapshot()` reconstructs whether a BUY position is still open and whether the persistent kill switch is engaged.
 
-On process restart, inspect the snapshot before accepting a new BUY. An unresolved open position must be reconciled before new strategy orders are accepted. An engaged kill switch blocks new BUY entries until explicitly released.
+`recover_risk_state()` reconstructs equity, current-day P&L, current-day trade count, and consecutive losses from the event history. The caller supplies the as-of timestamp so a restart on a new trading day does not inherit the previous day's daily counters.
+
+On process restart, inspect the open-position snapshot and recover risk state before accepting a new BUY. An unresolved open position must be reconciled before new strategy orders are accepted. An engaged kill switch blocks new BUY entries until explicitly released.
 
 ## Safety properties
 

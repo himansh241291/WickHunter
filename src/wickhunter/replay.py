@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .ledger import TradeLedger
@@ -28,6 +28,17 @@ def load_ticks(path: str | Path) -> list[Tick]:
     return ticks
 
 
+def _intent_expiry(intent: dict) -> datetime:
+    """Return explicit expiry, with v0.1 compatibility for older intents."""
+    if "expires_at" in intent:
+        expiry = datetime.fromisoformat(intent["expires_at"])
+    else:
+        expiry = datetime.fromisoformat(intent["time"]) + timedelta(minutes=1)
+    if expiry.tzinfo is None or expiry.utcoffset() is None:
+        raise ValueError("intent timestamps must be timezone-aware")
+    return expiry
+
+
 def replay_buy_intents(
     ticks: list[Tick],
     intents: list[dict],
@@ -38,18 +49,10 @@ def replay_buy_intents(
 ) -> RiskState:
     """Replay pre-approved BUY intents against ordered ticks.
 
-    An intent becomes eligible after its confirmation-candle timestamp and is
-    not filled until a strictly later ordered tick reaches its BUY trigger.
-    This prevents ticks belonging to the already-completed confirmation
-    candle from leaking into execution. The observed tick price is used as
-    the fill trigger, so gap-through-trigger execution is modeled.
-
-    Sessions are separated by the tick's local offset date: an open position
-    is liquidated at the last tick of the prior date and daily risk counters
-    reset before the next date begins. Pending intents do not cross sessions.
-
-    This function deliberately accepts BUY intents only; strategy generation
-    remains in the WickHunter engine and is not duplicated here.
+    An intent is eligible only during its immediate confirmation M1 candle.
+    It fills on the first strictly later ordered tick at/above the BUY
+    trigger. The observed tick price is the fill trigger, so gap-through-
+    trigger execution is modeled without inventing an unobserved price.
     """
     state = RiskState(starting_equity=starting_equity, equity=starting_equity)
     switch = KillSwitch(ledger) if ledger else None
@@ -70,9 +73,12 @@ def replay_buy_intents(
             pending.clear()
             session_date = tick.time.date()
 
-        while index < len(intent_by_time) and datetime.fromisoformat(intent_by_time[index]["time"]) < tick.time:
+        while index < len(intent_by_time) and datetime.fromisoformat(intent_by_time[index]["time"]) <= tick.time:
             pending.append(intent_by_time[index])
             index += 1
+
+        if pending:
+            pending[:] = [item for item in pending if tick.time < _intent_expiry(item)]
 
         if broker.position is None:
             for intent in pending:
@@ -92,4 +98,7 @@ def replay_buy_intents(
 
         broker.process_tick(tick)
         previous_tick = tick
+
+    if broker.position is not None and previous_tick is not None:
+        broker.close_session(time=previous_tick.time, price=previous_tick.price)
     return state

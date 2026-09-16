@@ -89,7 +89,7 @@ wickhunter generate-intents \
   --output data/buy-intents.json
 ```
 
-The intent exporter uses the same WickHunter state machine and previous-day levels as the strategy backtester. It emits only approved BUY intents; it does not contain a second signal-generation implementation.
+The intent exporter uses the same WickHunter state machine and previous-day levels as the strategy backtester. It emits only approved BUY intents; it does not contain a second signal-generation implementation. Each intent is bounded to the immediate confirmation M1 candle with an `expires_at` timestamp.
 
 Run dataset validation:
 
@@ -123,7 +123,7 @@ wickhunter paper-replay \
   --ledger reports/paper-ledger.jsonl
 ```
 
-The tick CSV requires `time,price`. Intent JSON is an array containing `time`, `trigger`, `stop`, and `target`, with optional `risk_fraction` and `spread`. The replay harness waits for the first ordered tick reaching the trigger and uses the observed tick price for the fill. It does not generate signals.
+The tick CSV requires `time,price`. Intent JSON is an array containing `time`, `trigger`, `stop`, and `target`, with optional `risk_fraction`, `spread`, and `expires_at`. The replay harness waits for the first ordered tick at/after the intent timestamp and before expiry that reaches the trigger, and uses the observed tick price for the fill. It does not generate signals.
 
 Backtest execution-cost controls:
 
@@ -138,36 +138,3 @@ The CLI writes JSON and CSV reports containing metrics, trades, rejections, audi
 ## Durable paper-trading safety
 
 Paper execution supports an append-only JSONL ledger with flush+fsync durability, restart inspection, durable risk-state reconstruction, and a persistent kill switch. Before resuming after a process restart, recover the ledger snapshot and risk state and reconcile any open position before accepting a new BUY. An engaged kill switch blocks new BUY entries.
-
-## Data format
-
-The dependency-free CSV adapter accepts:
-
-```text
-time,open,high,low,close,spread
-2026-01-02T09:00:00+00:00,100.5,100.8,99.0,99.5,0.1
-```
-
-Timestamps must be timezone-aware. `prepare_sessions()` groups candles by an explicit IANA timezone and derives PDH/PDL from the immediately preceding available completed session without using current/future candles.
-
-The validator reports same-date M1 gaps separately from expected overnight/session-boundary gaps. Use `--strict` when continuity gaps should cause validation failure.
-
-## Research discipline
-
-The research harness evaluates fixed parameter cases rather than silently optimizing against historical profit. Walk-forward evaluation keeps chronological train/test partitions disjoint and reports both independently. The framework does not select a configuration from test results.
-
-Historical performance is not implied by the unit-test fixtures; real market-data validation is required.
-
-## Tests
-
-Run locally:
-
-```bash
-pytest -q
-```
-
-GitHub Actions runs the test suite on pushes to `main` and pull requests.
-
-## Status
-
-Deterministic v0.1 rulebook + portable strategy engine + session-aware CSV pipeline + execution-cost model + audit ledger + CLI + sensitivity research + rolling walk-forward + ordered-tick execution + paper broker + durable paper ledger/risk recovery + kill switch + strategy-to-paper BUY intent export + paper replay CLI are implemented. No live-trading defaults should be inferred from the current code.

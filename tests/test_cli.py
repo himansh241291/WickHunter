@@ -35,7 +35,8 @@ def test_cli_paper_replay_writes_ledger(tmp_path, monkeypatch, capsys):
                      "2026-01-02T09:03:00+00:00,105\n", encoding="utf-8")
     intents = tmp_path / "intents.json"
     intents.write_text(json.dumps([{"time": "2026-01-02T09:01:00+00:00",
-        "trigger": 101, "stop": 99, "target": 105}]), encoding="utf-8")
+        "trigger": 101, "stop": 99, "target": 105,
+        "expires_at": "2026-01-02T09:03:00+00:00"}]), encoding="utf-8")
     ledger = tmp_path / "ledger.jsonl"
     monkeypatch.setattr("sys.argv", ["wickhunter", "paper-replay", "--ticks", str(ticks),
         "--intents", str(intents), "--ledger", str(ledger)])
@@ -63,4 +64,5 @@ def test_cli_generate_intents_exports_strategy_buy(tmp_path, monkeypatch, capsys
     assert intents[0]["trigger"] == 96.5
     assert intents[0]["stop"] == 94.0
     assert intents[0]["target"] == 105.0
+    assert "expires_at" in intents[0]
     assert "BUY intents: 1" in capsys.readouterr().out

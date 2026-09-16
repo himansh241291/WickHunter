@@ -4,11 +4,6 @@ from wickhunter.backtest import BacktestConfig, DailyLevels, WickHunterBackteste
 from wickhunter.models import Candle
 
 
-def bars(start_minute, *ohlc):
-    start = datetime(2026, 1, 2, 9, start_minute, tzinfo=timezone.utc)
-    return [Candle(start + timedelta(minutes=i), *values) for i, values in enumerate(ohlc)]
-
-
 def winning_setup(day, pdh=106.0, pdl=100.0, spread=0.0):
     start = datetime(2026, 1, day, 9, 0, tzinfo=timezone.utc)
     data = [
@@ -25,7 +20,8 @@ def losing_setup(day, pdh=106.0, pdl=100.0):
     return [
         Candle(start, 100.5, 100.8, 99.0, 99.5),
         Candle(start + timedelta(minutes=1), 99.5, 101.5, 99.2, 101.2),
-        Candle(start + timedelta(minutes=2), 101.2, 101.4, 98.0, 101.1),
+        Candle(start + timedelta(minutes=2), 101.2, 101.6, 100.8, 101.4),
+        Candle(start + timedelta(minutes=3), 101.4, 101.5, 98.0, 100.0),
     ], DailyLevels(f"2026-01-{day:02d}", pdh=pdh, pdl=pdl)
 
 
@@ -52,9 +48,9 @@ def test_max_daily_loss_blocks_later_setup_same_session():
     data = [
         Candle(start, 100.5, 100.8, 99.0, 99.5),
         Candle(start + timedelta(minutes=1), 99.5, 101.5, 99.2, 101.2),
-        Candle(start + timedelta(minutes=2), 101.2, 101.4, 98.0, 101.1),
-        Candle(start + timedelta(minutes=3), 101.1, 101.3, 99.0, 100.5),
-        Candle(start + timedelta(minutes=4), 100.5, 101.5, 99.2, 101.2),
+        Candle(start + timedelta(minutes=2), 101.2, 101.6, 100.8, 101.4),
+        Candle(start + timedelta(minutes=3), 101.4, 101.5, 98.0, 100.0),
+        Candle(start + timedelta(minutes=4), 100.0, 101.5, 99.2, 101.2),
         Candle(start + timedelta(minutes=5), 101.2, 105.0, 101.0, 104.0),
         Candle(start + timedelta(minutes=6), 104.0, 106.0, 103.8, 105.5),
     ]

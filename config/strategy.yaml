@@ -39,7 +39,7 @@ stop:
   model: SWEEP_LOW
   buffer: 0
 
- target:
+target:
   model: PREVIOUS_COMPLETED_DAY_HIGH
   level: PDH
   minimum_reward_risk: 1.5

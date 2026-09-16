@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .ledger import TradeLedger
 from .paper import PaperBroker
-from .risk import RiskState
+from .risk import BuyRiskGuard, RiskLimits, RiskState
 from .safety import KillSwitch
 from .tick import Tick
 
@@ -45,18 +45,25 @@ def replay_buy_intents(
     *,
     starting_equity: float = 100_000.0,
     risk_fraction: float = 0.01,
+    risk_limits: RiskLimits | None = None,
     ledger: TradeLedger | None = None,
 ) -> RiskState:
     """Replay pre-approved BUY intents against ordered ticks.
 
     An intent is eligible only during its immediate confirmation M1 candle.
-    It fills on the first strictly later ordered tick at/above the BUY
-    trigger. The observed tick price is the fill trigger, so gap-through-
-    trigger execution is modeled without inventing an unobserved price.
+    It fills on the first ordered tick at/after its intent timestamp and
+    before expiry that reaches the BUY trigger. The observed tick price is
+    the fill trigger, so gap-through-trigger execution is modeled without
+    inventing an unobserved price.
     """
     state = RiskState(starting_equity=starting_equity, equity=starting_equity)
     switch = KillSwitch(ledger) if ledger else None
-    broker = PaperBroker(state, ledger=ledger, kill_switch=switch)
+    broker = PaperBroker(
+        state,
+        risk_guard=BuyRiskGuard(risk_limits),
+        ledger=ledger,
+        kill_switch=switch,
+    )
     intent_by_time = sorted(intents, key=lambda item: datetime.fromisoformat(item["time"]))
     pending: list[dict] = []
     index = 0

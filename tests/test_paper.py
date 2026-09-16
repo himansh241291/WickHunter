@@ -74,3 +74,12 @@ def test_paper_blocks_new_buy_when_persisted_position_is_unreconciled(tmp_path):
     )
     assert restarted.submit_buy(time=_time(1), trigger=102, stop=100, target=106, requested_risk_fraction=0.01) is None
     assert restarted.audit[-1]["reason"] == "unreconciled_open_position"
+
+
+def test_paper_rejects_target_when_entry_slippage_crosses_it():
+    state = RiskState(starting_equity=100_000, equity=100_000)
+    broker = PaperBroker(state, execution=ExecutionConfig(entry_slippage=5.0))
+    assert broker.submit_buy(
+        time=_time(), trigger=101, stop=99, target=104, requested_risk_fraction=0.01
+    ) is None
+    assert broker.audit[-1]["reason"] == "invalid_long_target"

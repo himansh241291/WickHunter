@@ -35,6 +35,11 @@ def replay_buy_intents(
 ) -> RiskState:
     """Replay pre-approved BUY intents against ordered ticks.
 
+    An intent becomes eligible at its timestamp but is not filled until a
+    later/equal ordered tick reaches its BUY trigger. The observed tick price
+    is used as the fill trigger, so gap-through-trigger execution is modeled
+    instead of silently filling at an unobserved trigger price.
+
     This function deliberately accepts BUY intents only; strategy generation
     remains in the WickHunter engine and is not duplicated here.
     """
@@ -42,18 +47,28 @@ def replay_buy_intents(
     switch = KillSwitch(ledger) if ledger else None
     broker = PaperBroker(state, ledger=ledger, kill_switch=switch)
     intent_by_time = sorted(intents, key=lambda item: datetime.fromisoformat(item["time"]))
+    pending: list[dict] = []
     index = 0
     for tick in ticks:
         while index < len(intent_by_time) and datetime.fromisoformat(intent_by_time[index]["time"]) <= tick.time:
-            intent = intent_by_time[index]
-            broker.submit_buy(
-                time=datetime.fromisoformat(intent["time"]),
-                trigger=float(intent["trigger"]),
-                stop=float(intent["stop"]),
-                target=float(intent["target"]),
-                requested_risk_fraction=float(intent.get("risk_fraction", risk_fraction)),
-                spread=float(intent.get("spread", 0.0)),
-            )
+            pending.append(intent_by_time[index])
             index += 1
+
+        if broker.position is None:
+            for intent in pending:
+                if tick.price < float(intent["trigger"]):
+                    continue
+                submitted = broker.submit_buy(
+                    time=tick.time,
+                    trigger=tick.price,
+                    stop=float(intent["stop"]),
+                    target=float(intent["target"]),
+                    requested_risk_fraction=float(intent.get("risk_fraction", risk_fraction)),
+                    spread=float(intent.get("spread", 0.0)),
+                )
+                pending.remove(intent)
+                if submitted is not None:
+                    break
+
         broker.process_tick(tick)
     return state

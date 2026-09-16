@@ -94,10 +94,10 @@ def run_backtest(args):
 
 
 def run_validate(args):
-    report = validate_m1(load_m1_csv(args.data))
+    report = validate_m1(load_m1_csv(args.data), strict_continuity=args.strict)
     payload = asdict(report) | {"valid": report.valid}
     print(json.dumps(payload, indent=2, allow_nan=False))
-    return 1 if not report.valid or (args.strict and report.gaps) else 0
+    return 0 if report.valid else 1
 
 
 def run_research(args):

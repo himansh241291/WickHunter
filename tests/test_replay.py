@@ -49,11 +49,10 @@ def test_replay_waits_for_trigger_and_uses_observed_gap_price():
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
         Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 100.5),
         Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 101.25),
-        Tick(datetime(2026, 1, 2, 9, 3, tzinfo=timezone.utc), 105),
     ]
     state = replay_buy_intents(
         ticks,
-        [{"time": "2026-01-02T09:00:00+00:00", "trigger": 101, "stop": 99, "target": 105}],
+        [{"time": "2026-01-02T09:01:00+00:00", "trigger": 101, "stop": 99, "target": 105}],
     )
     assert state.trades_today == 1
     assert state.equity > state.starting_equity
@@ -96,13 +95,14 @@ def test_replay_expired_intent_cannot_fill_on_later_tick():
 def test_replay_final_open_position_is_liquidated(tmp_path):
     ticks = [
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
-        Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 101),
-        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 102),
+        Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 9, 3, tzinfo=timezone.utc), 102),
     ]
     ledger = TradeLedger(tmp_path / "final-replay-ledger.jsonl")
     state = replay_buy_intents(
         ticks,
-        [{"time": "2026-01-02T09:00:00+00:00", "trigger": 101, "stop": 99, "target": 105}],
+        [{"time": "2026-01-02T09:01:00+00:00", "trigger": 101, "stop": 99, "target": 105}],
         ledger=ledger,
     )
     assert state.trades_today == 1

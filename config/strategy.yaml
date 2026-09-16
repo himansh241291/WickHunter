@@ -1,6 +1,4 @@
-# WickHunter configuration baseline
-# Values marked null are intentionally unresolved until the rulebook is finalized.
-
+# WickHunter v0.1 deterministic baseline
 strategy:
   name: WickHunter
   version: 0.1.0
@@ -9,36 +7,42 @@ strategy:
 
 levels:
   reference: PREVIOUS_COMPLETED_DAY_LOW
-  timezone: null
+  target: PREVIOUS_COMPLETED_DAY_HIGH
+  timezone: Asia/Kolkata
 
 sweep:
-  minimum_depth: null
-  depth_unit: null
-  reclaim_required: null
+  condition: LOW_BELOW_PDL
+  minimum_depth: 0
+  depth_unit: PRICE
+  reclaim_required: true
+  sustained_below_pdl_closes: 2
 
 signal:
   type: BULLISH_REVERSAL
-  minimum_body: null
-  close_location: null
+  minimum_body_fraction: 0.20
+  close_location_minimum: 0.50
+  close_above_pdl: true
+  low_must_touch_or_sweep_pdl: true
 
 confirmation:
   trigger: SIGNAL_CANDLE_HIGH
   expiration_candles: 1
+  equality_triggers: true
 
 risk:
-  risk_per_trade_percent: null
-  maximum_trades_per_day: null
+  risk_per_trade_percent: 1.0
+  maximum_trades_per_day: 1
   maximum_daily_loss_percent: null
   maximum_consecutive_losses: null
 
 stop:
   model: SWEEP_LOW
-  buffer: null
+  buffer: 0
 
-target:
-  model: null
-  level: null
-  minimum_reward_risk: null
+ target:
+  model: PREVIOUS_COMPLETED_DAY_HIGH
+  level: PDH
+  minimum_reward_risk: 1.5
 
 filters:
   session_start: null
@@ -48,7 +52,11 @@ filters:
   news_filter: null
 
 execution:
-  order_type: MARKET
-  slippage_tolerance: null
+  order_type: BUY_STOP_TRIGGER
+  entry_slippage: 0
+  exit_slippage: 0
+  commission_per_unit: 0
+  exit_ambiguity: STOP_FIRST
+  session_end_liquidation: true
 
 # SELL/SHORT configuration intentionally does not exist.

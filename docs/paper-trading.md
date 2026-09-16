@@ -17,7 +17,7 @@ WickHunter keeps strategy decisions separate from execution and account risk. Th
 
 A BUY intent carries an explicit `expires_at` equal to the start of the next M1 candle. Ticks at or after that boundary cannot fill the intent. Older intent files without `expires_at` use a one-minute compatibility expiry.
 
-Replay sessions are separated by the timestamp's local offset date. An open position is liquidated at the last tick of the previous date, daily trade/loss counters reset, and pending intents do not cross the session boundary. If the input ends with an open position, the final observed tick is used for deterministic session-end liquidation.
+Replay requires an explicit IANA session timezone via `--timezone` (default `UTC`). Session boundaries, daily trade counters, and daily loss accounting use that timezone rather than the raw UTC calendar date. This must match the timezone used when generating strategy sessions, for example `Asia/Kolkata` for an Indian-market session. An open position is liquidated at the last tick of the previous session date, daily counters reset, and pending intents do not cross the session boundary. If the input ends with an open position, the final observed tick is used for deterministic session-end liquidation.
 
 Tick CSV timestamps must be timezone-aware.
 
@@ -45,6 +45,7 @@ Entry slippage is applied before final target validation. If adverse entry slipp
 - Execution costs are explicit and adverse to the simulated long position.
 - Corrupt ledger records raise an error rather than silently producing a false recovery state.
 - Expired BUY intents cannot be resurrected by later market prices.
+- Session boundaries are derived from one explicit timezone consistently across strategy generation and tick replay.
 
 ## Broker-neutral boundary
 

@@ -120,10 +120,24 @@ Run ordered-tick paper replay from approved BUY intents:
 wickhunter paper-replay \
   --ticks data/ticks.csv \
   --intents data/buy-intents.json \
+  --timezone Asia/Kolkata \
   --ledger reports/paper-ledger.jsonl
 ```
 
-The tick CSV requires `time,price`. Intent JSON is an array containing `time`, `trigger`, `stop`, and `target`, with optional `risk_fraction`, `spread`, and `expires_at`. The replay harness waits for the first ordered tick at/after the intent timestamp and before expiry that reaches the trigger, and uses the observed tick price for the fill. It does not generate signals.
+The tick CSV requires `time,price`. Intent JSON is an array containing `time`, `trigger`, `stop`, and `target`, with optional `risk_fraction`, `spread`, and `expires_at`. The replay harness waits for the **first strictly later** ordered tick before expiry that reaches the trigger, and uses the observed tick price for the fill. It does not generate signals.
+
+Paper replay risk controls:
+
+```text
+--max-risk-fraction
+--max-trades-per-day
+--max-daily-loss-fraction
+--max-consecutive-losses
+--max-spread
+--max-slippage
+```
+
+The replay `--timezone` must match the session timezone used for strategy intent generation. Daily counters and session boundaries are calculated in that IANA timezone, not from the raw UTC calendar date.
 
 Backtest execution-cost controls:
 
@@ -138,3 +152,13 @@ The CLI writes JSON and CSV reports containing metrics, trades, rejections, audi
 ## Durable paper-trading safety
 
 Paper execution supports an append-only JSONL ledger with flush+fsync durability, restart inspection, durable risk-state reconstruction, and a persistent kill switch. Before resuming after a process restart, recover the ledger snapshot and risk state and reconcile any open position before accepting a new BUY. An engaged kill switch blocks new BUY entries.
+
+Daily loss limits are measured against equity at the start of the current trading day. A profitable prior day therefore does not distort the next day's percentage loss limit.
+
+## Research discipline
+
+Historical performance is not treated as proof of future profitability. The research harness keeps parameter cases explicit, supports cost sensitivity and rolling train/test evaluation, and does not silently optimize against the test period. Ordered ticks are preferred when intrabar ordering matters.
+
+## Status
+
+The repository currently contains the deterministic strategy engine, session-aware M1 data pipeline, OHLC backtester, execution-cost model, audit ledger, dataset validation, fixed sensitivity research, rolling walk-forward evaluation, BUY-intent exporter, ordered-tick paper replay, risk guardrails, durable recovery state, and persistent kill switch. There is no live-trading default and no SELL-entry implementation.

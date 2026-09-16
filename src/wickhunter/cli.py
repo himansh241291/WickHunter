@@ -22,7 +22,6 @@ def _data_args(parser):
 def build_parser():
     parser = argparse.ArgumentParser(prog="wickhunter", description="BUY-only WickHunter research engine")
     sub = parser.add_subparsers(dest="command", required=True)
-
     backtest = sub.add_parser("backtest", help="run a backtest")
     _data_args(backtest)
     backtest.add_argument("--output-dir", default="reports")
@@ -30,7 +29,7 @@ def build_parser():
     backtest.add_argument("--risk-fraction", type=float, default=0.01)
     backtest.add_argument("--minimum-rr", type=float, default=1.5)
     backtest.add_argument("--stop-buffer", type=float, default=0.0)
-    backtest.add_argument("--entry-slippage", type=float, default=0.0)
+    backtest.add_argument("--entry-slippage", "--slippage", dest="entry_slippage", type=float, default=0.0)
     backtest.add_argument("--exit-slippage", type=float, default=0.0)
     backtest.add_argument("--commission-per-unit", type=float, default=0.0)
     backtest.add_argument("--max-trades-per-day", type=int, default=1)
@@ -75,14 +74,10 @@ def run_backtest(args):
     candles = load_m1_csv(args.data)
     sessions, levels = prepare_sessions(candles, timezone_name=args.timezone)
     config = BacktestConfig(
-        starting_equity=args.starting_equity,
-        risk_fraction=args.risk_fraction,
-        minimum_reward_risk=args.minimum_rr,
-        stop_buffer=args.stop_buffer,
-        max_trades_per_day=args.max_trades_per_day,
-        entry_slippage=args.entry_slippage,
-        exit_slippage=args.exit_slippage,
-        commission_per_unit=args.commission_per_unit,
+        starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
+        minimum_reward_risk=args.minimum_rr, stop_buffer=args.stop_buffer,
+        max_trades_per_day=args.max_trades_per_day, entry_slippage=args.entry_slippage,
+        exit_slippage=args.exit_slippage, commission_per_unit=args.commission_per_unit,
         liquidate_at_session_end=not args.no_session_liquidation,
     )
     result = WickHunterBacktester(config).run(sessions, levels)
@@ -109,12 +104,9 @@ def run_research(args):
     candles = load_m1_csv(args.data)
     sessions, levels = prepare_sessions(candles, timezone_name=args.timezone)
     cases = sensitivity_cases(
-        starting_equity=args.starting_equity,
-        risk_fraction=args.risk_fraction,
-        minimum_rr_values=_floats(args.rr_values),
-        stop_buffers=_floats(args.stop_buffers),
-        slippages=_floats(args.entry_slippages),
-        exit_slippages=_floats(args.exit_slippages),
+        starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
+        minimum_rr_values=_floats(args.rr_values), stop_buffers=_floats(args.stop_buffers),
+        slippages=_floats(args.entry_slippages), exit_slippages=_floats(args.exit_slippages),
         commissions_per_unit=_floats(args.commissions),
     )
     output = Path(args.output_dir)
@@ -138,12 +130,9 @@ def run_research(args):
 
 def main():
     args = build_parser().parse_args()
-    if args.command == "backtest":
-        return run_backtest(args)
-    if args.command == "validate":
-        return run_validate(args)
-    if args.command == "research":
-        return run_research(args)
+    if args.command == "backtest": return run_backtest(args)
+    if args.command == "validate": return run_validate(args)
+    if args.command == "research": return run_research(args)
     return 2
 
 

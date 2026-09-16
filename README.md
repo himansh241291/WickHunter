@@ -29,6 +29,7 @@ The project is intentionally independent of any other trading project or reposit
 - No hidden discretionary assumptions.
 - Preserve a baseline strategy before optimization.
 - Execution assumptions must be explicit and replaceable.
+- Separate train/test periods to reduce research leakage.
 
 ## Current architecture
 
@@ -56,9 +57,14 @@ CSV / future market-data adapter
        |
        v
  Performance metrics
+       |
+       v
+ Research / Walk-forward reports
 ```
 
 The strategy core has no broker SDK dependency. The current OHLC backtester deliberately starts exit evaluation on the candle after the intrabar SignalHigh entry trigger because OHLC bars cannot prove whether a stop or target was touched before or after entry. The baseline also liquidates an open position at the session's final close rather than carrying it into another session. A future tick-level execution model can replace these assumptions without changing the signal rules.
+
+Execution costs are explicit: entry slippage, exit slippage, and per-unit commission. Exit ambiguity is deterministic stop-first for the baseline OHLC model.
 
 ## CLI
 
@@ -74,29 +80,38 @@ Run a backtest:
 wickhunter backtest --data data/M1.csv --timezone Asia/Kolkata --output-dir reports
 ```
 
-Optional research controls:
+Run dataset validation:
 
-```text
---starting-equity
---risk-fraction
---minimum-rr
---stop-buffer
---slippage
---max-trades-per-day
---no-session-liquidation
+```bash
+wickhunter validate --data data/M1.csv --timezone Asia/Kolkata
 ```
 
-The CLI writes:
+Run a fixed research matrix:
 
-```text
-reports/
-├── summary.json
-├── trades.csv
-├── rejected.csv
-└── audit.csv
+```bash
+wickhunter research --data data/M1.csv --timezone Asia/Kolkata \
+  --rr-values 1.5,2.0,2.5 \
+  --entry-slippages 0,0.02 --exit-slippages 0,0.02 \
+  --commissions 0,0.01 --output-dir reports/research
 ```
 
-The audit ledger records executed BUYs, exits, and rejected executions. The baseline backtester uses deterministic stop-first ordering when both stop and target are touched inside the same OHLC candle.
+Run rolling walk-forward evaluation:
+
+```bash
+wickhunter research --data data/M1.csv --timezone Asia/Kolkata \
+  --train-size 60 --test-size 20 --step 20 \
+  --rr-values 1.5,2.0,2.5 --output-dir reports/walkforward
+```
+
+Backtest execution-cost controls:
+
+```text
+--entry-slippage / --slippage   # backward-compatible alias
+--exit-slippage
+--commission-per-unit
+```
+
+The CLI writes JSON and CSV reports containing metrics, trades, rejections, audit events, and walk-forward train/test results where requested.
 
 ## Data format
 
@@ -107,7 +122,15 @@ time,open,high,low,close,spread
 2026-01-02T09:00:00+00:00,100.5,100.8,99.0,99.5,0.1
 ```
 
-Timestamps must be timezone-aware. `prepare_sessions()` can group candles by an explicit IANA timezone and derive PDH/PDL from the immediately preceding available completed session without using current/future candles.
+Timestamps must be timezone-aware. `prepare_sessions()` groups candles by an explicit IANA timezone and derives PDH/PDL from the immediately preceding available completed session without using current/future candles.
+
+The validator reports same-date M1 gaps separately from expected overnight/session-boundary gaps. Use `--strict` when continuity gaps should cause validation failure.
+
+## Research discipline
+
+The research harness evaluates fixed parameter cases rather than silently optimizing against historical profit. Walk-forward evaluation keeps chronological train/test partitions disjoint and reports both independently. The framework does not select a configuration from test results.
+
+Historical performance is not implied by the unit-test fixtures; real market-data validation is required.
 
 ## Tests
 
@@ -121,4 +144,4 @@ GitHub Actions runs the test suite on pushes to `main` and pull requests.
 
 ## Status
 
-Deterministic v0.1 rulebook + portable strategy engine + session-aware CSV pipeline + research backtester + audit ledger + CLI reporting are implemented. Next build stage is historical-data ingestion and execution-cost realism, followed by out-of-sample validation. No live-trading defaults should be inferred from the current code.
+Deterministic v0.1 rulebook + portable strategy engine + session-aware CSV pipeline + execution-cost model + audit ledger + CLI + sensitivity research + rolling walk-forward framework are implemented. Next build stage is stronger market-data quality controls, tick-level execution modeling where data permits, and paper-trading infrastructure. No live-trading defaults should be inferred from the current code.

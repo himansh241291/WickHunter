@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from .ledger import TradeLedger
 from .paper import PaperBroker
@@ -47,15 +48,21 @@ def replay_buy_intents(
     risk_fraction: float = 0.01,
     risk_limits: RiskLimits | None = None,
     ledger: TradeLedger | None = None,
+    timezone_name: str = "UTC",
 ) -> RiskState:
     """Replay pre-approved BUY intents against ordered ticks.
 
     An intent is eligible only during its immediate confirmation M1 candle.
     It fills on the first ordered tick at/after its intent timestamp and
     before expiry that reaches the BUY trigger. The observed tick price is
-    the fill trigger, so gap-through-trigger execution is modeled without
+    the fill price, so gap-through-trigger execution is modeled without
     inventing an unobserved price.
+
+    Session boundaries are determined in the supplied IANA timezone rather
+    than from the source timestamp's UTC date. This keeps daily risk limits
+    aligned with the same session calendar used by strategy data preparation.
     """
+    session_tz = ZoneInfo(timezone_name)
     state = RiskState(starting_equity=starting_equity, equity=starting_equity)
     switch = KillSwitch(ledger) if ledger else None
     broker = PaperBroker(
@@ -71,14 +78,15 @@ def replay_buy_intents(
     session_date = None
 
     for tick in ticks:
+        tick_session_date = tick.time.astimezone(session_tz).date()
         if session_date is None:
-            session_date = tick.time.date()
-        elif tick.time.date() != session_date:
+            session_date = tick_session_date
+        elif tick_session_date != session_date:
             if broker.position is not None and previous_tick is not None:
                 broker.close_session(time=previous_tick.time, price=previous_tick.price)
             state.reset_day()
             pending.clear()
-            session_date = tick.time.date()
+            session_date = tick_session_date
 
         while index < len(intent_by_time) and datetime.fromisoformat(intent_by_time[index]["time"]) <= tick.time:
             pending.append(intent_by_time[index])

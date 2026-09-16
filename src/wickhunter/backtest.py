@@ -109,10 +109,10 @@ class WickHunterBacktester:
         return None, None
 
     @staticmethod
-    def _audit(result: BacktestResult, session: str, candle: Candle, event: str, **details) -> None:
+    def _audit(backtest_result: BacktestResult, session: str, candle: Candle, event: str, **details) -> None:
         row = {"session": session, "time": str(candle.time), "event": event}
         row.update(details)
-        result.audit.append(row)
+        backtest_result.audit.append(row)
 
     def _close_trade(self, result, session, pending, candle, exit_price, exit_result) -> float:
         executable_exit = self.execution.exit_price(exit_price)
@@ -122,27 +122,18 @@ class WickHunterBacktester:
         risk_cash = (pending["entry"] - pending["stop"]) * pending["quantity"]
         result.trades.append(BacktestTrade(
             session=session,
-            entry_time=pending["entry_time"],
-            entry=pending["entry"],
-            stop=pending["stop"],
-            target=pending["target"],
-            quantity=pending["quantity"],
-            exit_time=candle.time,
-            exit_price=executable_exit,
-            result=exit_result,
-            gross_pnl=gross_pnl,
-            commission=commission,
-            pnl=pnl,
-            r_multiple=pnl / risk_cash if risk_cash else 0.0,
+            entry_time=pending["entry_time"], entry=pending["entry"], stop=pending["stop"],
+            target=pending["target"], quantity=pending["quantity"], exit_time=candle.time,
+            exit_price=executable_exit, result=exit_result, gross_pnl=gross_pnl,
+            commission=commission, pnl=pnl, r_multiple=pnl / risk_cash if risk_cash else 0.0,
         ))
-        self._audit(result, session, candle, "EXIT", outcome=exit_result, price=executable_exit,
+        self._audit(result, session, candle, "EXIT", result=exit_result, price=executable_exit,
                     gross_pnl=gross_pnl, commission=commission, pnl=pnl)
         return pnl
 
     def run(self, sessions: dict[str, Iterable[Candle]], levels: dict[str, DailyLevels]) -> BacktestResult:
         equity = self.config.starting_equity
         result = BacktestResult(equity, equity)
-
         for session in sorted(sessions):
             candles = list(sessions[session])
             if session not in levels:
@@ -150,7 +141,6 @@ class WickHunterBacktester:
                 continue
             if not candles:
                 continue
-
             day = levels[session]
             engine = WickHunterEngine(
                 pdl=day.pdl, pdh=day.pdh,
@@ -161,7 +151,6 @@ class WickHunterBacktester:
                 ),
             )
             pending = None
-
             for candle in candles:
                 if pending is not None:
                     exit_price, exit_result = self._resolve_exit(candle, pending["stop"], pending["target"])
@@ -169,38 +158,29 @@ class WickHunterBacktester:
                         equity += self._close_trade(result, session, pending, candle, exit_price, exit_result)
                         pending = None
                     continue
-
                 event = engine.on_candle(candle)
                 if not event or event.get("action") != "BUY":
                     continue
-
                 entry = self.execution.entry_price(event["entry"])
                 if candle.high < entry:
-                    result.rejected.append({"session": session, "time": str(candle.time),
-                                            "reason": "ENTRY_NOT_FILLED_SLIPPAGE"})
+                    result.rejected.append({"session": session, "time": str(candle.time), "reason": "ENTRY_NOT_FILLED_SLIPPAGE"})
                     self._audit(result, session, candle, "REJECT", reason="ENTRY_NOT_FILLED_SLIPPAGE")
                     continue
-
-                stop = event["stop"]
-                target = event["target"]
+                stop, target = event["stop"], event["target"]
                 risk_per_unit = entry - stop
                 if risk_per_unit <= 0:
                     result.rejected.append({"session": session, "time": str(candle.time), "reason": "INVALID_STOP"})
                     self._audit(result, session, candle, "REJECT", reason="INVALID_STOP")
                     continue
-
                 quantity = equity * self.config.risk_fraction / risk_per_unit
-                pending = {"entry_time": candle.time, "entry": entry, "stop": stop,
-                           "target": target, "quantity": quantity}
+                pending = {"entry_time": candle.time, "entry": entry, "stop": stop, "target": target, "quantity": quantity}
                 self._audit(result, session, candle, "BUY", entry=entry, stop=stop, target=target,
                             signal_time=str(event["signal_time"]), confirmation_time=str(event["confirmation_time"]))
-
             if pending is not None:
                 if self.config.liquidate_at_session_end:
                     last = candles[-1]
                     equity += self._close_trade(result, session, pending, last, last.close, "SESSION_CLOSE")
                 else:
                     result.rejected.append({"session": session, "reason": "OPEN_AT_SESSION_END"})
-
         result.ending_equity = equity
         return result

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Backtest/runtime output
+runs/
+results/
+reports/generated/
+*.log
+
+# Trading platform local files
+*.ex5
+*.ex4

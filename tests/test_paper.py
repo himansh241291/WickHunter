@@ -83,3 +83,20 @@ def test_paper_rejects_target_when_entry_slippage_crosses_it():
         time=_time(), trigger=101, stop=99, target=104, requested_risk_fraction=0.01
     ) is None
     assert broker.audit[-1]["reason"] == "invalid_long_target"
+
+
+def test_paper_restores_persisted_buy_position():
+    path = ""
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        path = f"{directory}/ledger.jsonl"
+        ledger = TradeLedger(path)
+        original = PaperBroker(RiskState(100_000, 100_000), ledger=ledger)
+        assert original.submit_buy(time=_time(), trigger=101, stop=99, target=105, requested_risk_fraction=0.01)
+        snapshot = ledger.snapshot()["open_position"]
+        assert snapshot is not None
+        recovered = PaperBroker(RiskState(100_000, 100_000), ledger=ledger)
+        position = recovered.restore_open_position(snapshot)
+        assert position.entry == 101
+        close = recovered.process_tick(Tick(_time(1), 105))
+        assert close is not None and close.result == "WIN"

@@ -22,6 +22,7 @@ class EngineConfig:
     minimum_reward_risk: float = 1.5
     stop_buffer: float = 0.0
     max_trades_per_day: int = 1
+    sustained_below_pdl_closes: int = 2
 
 
 class WickHunterEngine:
@@ -37,18 +38,17 @@ class WickHunterEngine:
         self.sweep: Optional[SweepEvent] = None
         self.signal: Optional[Signal] = None
         self.trades = 0
+        self._below_pdl_closes = 0
 
     def on_candle(self, candle: Candle) -> Optional[dict]:
-        """Process one completed M1 candle.
-
-        Returns an entry event only when a long confirmation occurs.
-        """
+        """Process one completed M1 candle and return a BUY event or None."""
         if self.state in (State.DONE, State.POSITION_OPEN):
             return None
 
         if self.state == State.WAIT_FOR_LOW_SWEEP:
             if candle.low < self.pdl:
                 self.sweep = SweepEvent(candle.time, self.pdl, candle.low)
+                self._below_pdl_closes = 1 if candle.close < self.pdl else 0
                 self.state = State.WAIT_FOR_BULLISH_SIGNAL
             return None
 
@@ -57,25 +57,26 @@ class WickHunterEngine:
             sweep_low = min(self.sweep.sweep_low, candle.low)
             self.sweep = SweepEvent(self.sweep.start_time, self.pdl, sweep_low)
 
+            if candle.close < self.pdl:
+                self._below_pdl_closes += 1
+            else:
+                self._below_pdl_closes = 0
+
             if is_bullish_signal(candle, self.pdl, previous_swept=True):
-                self.signal = Signal(
-                    candle.time,
-                    candle.high,
-                    candle.low,
-                    sweep_low,
-                    self.pdl,
-                )
+                self.signal = Signal(candle.time, candle.high, candle.low, sweep_low, self.pdl)
                 self.state = State.LONG_READY
                 return None
 
-            # Two completed closes below PDL without a signal invalidate the event.
-            # The engine starts a new sweep only from a future qualifying candle.
-            # This conservative baseline is handled by the caller/backtest session.
+            if self._below_pdl_closes >= self.config.sustained_below_pdl_closes:
+                self.state = State.DONE
             return None
 
         if self.state == State.LONG_READY:
             assert self.signal is not None
-            if candle.high <= self.signal.signal_high:
+            # Confirmation is only the immediately following M1 candle.
+            # Equality counts as a trigger because the execution rule is
+            # "at/above SignalHigh".
+            if candle.high < self.signal.signal_high:
                 self.state = State.DONE
                 return None
 

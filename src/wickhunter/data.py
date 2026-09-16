@@ -14,11 +14,7 @@ REQUIRED_COLUMNS = {"time", "open", "high", "low", "close"}
 
 
 def load_m1_csv(path: str | Path) -> list[Candle]:
-    """Load M1 OHLC CSV with ISO-8601 timestamps.
-
-    Expected columns: time,open,high,low,close[,spread]. Timestamps must be
-    timezone-aware so session boundaries cannot depend on machine-local time.
-    """
+    """Load M1 OHLC CSV with ISO-8601, timezone-aware timestamps."""
     candles: list[Candle] = []
     with Path(path).open("r", newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
@@ -28,7 +24,7 @@ def load_m1_csv(path: str | Path) -> list[Candle]:
             raise ValueError(f"Missing CSV columns: {sorted(missing)}")
         for line_number, row in enumerate(reader, start=2):
             timestamp = datetime.fromisoformat(row["time"])
-            if timestamp.tzinfo is None:
+            if timestamp.tzinfo is None or timestamp.utcoffset() is None:
                 raise ValueError(f"Timestamp at CSV line {line_number} must be timezone-aware")
             candles.append(Candle(
                 time=timestamp,
@@ -43,8 +39,6 @@ def load_m1_csv(path: str | Path) -> list[Candle]:
     for previous, current in zip(candles, candles[1:]):
         if current.time == previous.time:
             raise ValueError(f"Duplicate candle timestamp: {current.time.isoformat()}")
-        if current.time < previous.time:
-            raise ValueError("Candle timestamps must be chronological")
     return candles
 
 
@@ -52,12 +46,11 @@ def prepare_sessions(
     candles: list[Candle],
     timezone_name: str = "UTC",
 ) -> tuple[dict[str, list[Candle]], dict[str, DailyLevels]]:
-    """Group candles by explicit trading date and derive prior-session levels.
+    """Group candles by explicit local trading date and derive prior levels.
 
-    The first available session has no previous completed session and is
-    intentionally excluded from ``levels``. Each later session uses only the
-    immediately preceding available session, preventing current/future data
-    from leaking into PDH/PDL.
+    Missing calendar days are treated as non-trading days: the previous
+    available session supplies PDH/PDL. Current and future candles are never
+    used to construct a session's levels.
     """
     timezone = ZoneInfo(timezone_name)
     grouped: OrderedDict[str, list[Candle]] = OrderedDict()

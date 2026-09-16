@@ -33,6 +33,7 @@ class BuyCoordinator:
         pdh: float,
         execution: BuyExecutionPort,
         risk_state: RiskState,
+        risk_fraction: float = 0.01,
         risk_limits: RiskLimits | None = None,
         engine_config: EngineConfig | None = None,
     ) -> None:
@@ -40,14 +41,17 @@ class BuyCoordinator:
         self.execution = execution
         self.risk_state = risk_state
         self.risk_guard = BuyRiskGuard(risk_limits)
+        self.risk_fraction = risk_fraction
+        if not 0 < risk_fraction <= self.risk_guard.limits.max_risk_fraction:
+            raise ValueError("risk_fraction exceeds configured BUY risk limit")
         self.armed: ArmedBuy | None = None
         self.receipt: OrderReceipt | None = None
 
     def on_completed_candle(self, candle: Candle) -> ArmedBuy | None:
         """Process a completed M1 candle and arm the next-candle BUY trigger.
 
-        The important timing rule is that the signal candle is complete before
-        the order is armed. The confirmation candle has not completed yet.
+        The signal candle is complete before the order is armed. The
+        confirmation candle has not completed yet, so there is no lookahead.
         """
         if self.armed is not None or self.receipt is not None:
             return self.armed
@@ -87,9 +91,7 @@ class BuyCoordinator:
             self.risk_state,
             entry=price,
             stop=armed.order.stop,
-            requested_risk_fraction=min(
-                self.risk_guard.limits.max_risk_fraction, 0.01
-            ),
+            requested_risk_fraction=self.risk_fraction,
             spread=spread,
             expected_slippage=0.0,
         )

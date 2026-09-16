@@ -47,23 +47,34 @@ def recover_risk_state(
     daily_pnl = 0.0
     trades_today = 0
     consecutive_losses = 0
+    current_day_started = False
+
     for item in events:
         if item.event == "BUY_FILLED":
             if item.time.date() == as_of.date():
+                if not current_day_started:
+                    day_starting_equity = equity
+                    current_day_started = True
                 trades_today += 1
         elif item.event == "POSITION_CLOSED":
             pnl = float(item.data.get("net_pnl", 0.0))
             if item.time.date() == as_of.date():
-                if daily_pnl == 0.0:
+                if not current_day_started:
                     day_starting_equity = equity
+                    current_day_started = True
                 daily_pnl += pnl
             equity += pnl
+            if item.time.date() != as_of.date() and item.time.date() > as_of.date():
+                raise ValueError("ledger contains future event relative to as_of")
             if item.time.date() != as_of.date():
                 day_starting_equity = equity
             if pnl < 0:
                 consecutive_losses += 1
             elif pnl > 0:
                 consecutive_losses = 0
+
+    if not current_day_started:
+        day_starting_equity = equity
 
     return RiskState(
         starting_equity=starting_equity,

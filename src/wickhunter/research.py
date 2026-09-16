@@ -21,7 +21,7 @@ class ResearchCase:
 @dataclass(frozen=True)
 class ResearchResult:
     name: str
-    metrics: dict[str, float]
+    metrics: dict
 
 
 def run_cases(
@@ -44,8 +44,10 @@ def sensitivity_cases(
     minimum_rr_values: Iterable[float] = (1.5, 2.0, 2.5),
     stop_buffers: Iterable[float] = (0.0,),
     slippages: Iterable[float] = (0.0,),
+    exit_slippages: Iterable[float] = (0.0,),
+    commissions_per_unit: Iterable[float] = (0.0,),
 ) -> list[ResearchCase]:
-    """Build a transparent one-/few-parameter sensitivity grid.
+    """Build a transparent sensitivity grid.
 
     This is a research matrix, not an optimization objective. The caller can
     compare stability across nearby assumptions and later separate in-sample
@@ -55,17 +57,24 @@ def sensitivity_cases(
     for rr in minimum_rr_values:
         for buffer in stop_buffers:
             for slippage in slippages:
-                name = f"rr={rr:g}|buffer={buffer:g}|slippage={slippage:g}"
-                cases.append(
-                    ResearchCase(
-                        name=name,
-                        config=BacktestConfig(
-                            starting_equity=starting_equity,
-                            risk_fraction=risk_fraction,
-                            minimum_reward_risk=rr,
-                            stop_buffer=buffer,
-                            slippage=slippage,
-                        ),
-                    )
-                )
+                for exit_slippage in exit_slippages:
+                    for commission in commissions_per_unit:
+                        name = (
+                            f"rr={rr:g}|buffer={buffer:g}|entry_slip={slippage:g}"
+                            f"|exit_slip={exit_slippage:g}|commission={commission:g}"
+                        )
+                        cases.append(
+                            ResearchCase(
+                                name=name,
+                                config=BacktestConfig(
+                                    starting_equity=starting_equity,
+                                    risk_fraction=risk_fraction,
+                                    minimum_reward_risk=rr,
+                                    stop_buffer=buffer,
+                                    entry_slippage=slippage,
+                                    exit_slippage=exit_slippage,
+                                    commission_per_unit=commission,
+                                ),
+                            )
+                        )
     return cases

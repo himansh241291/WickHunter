@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Iterable
 
 from .engine import EngineConfig, WickHunterEngine
@@ -22,10 +22,11 @@ class BuyIntent:
     spread: float
     signal_time: datetime
     confirmation_time: datetime
+    expires_at: datetime
 
     def as_dict(self) -> dict:
         data = asdict(self)
-        for key in ("time", "signal_time", "confirmation_time"):
+        for key in ("time", "signal_time", "confirmation_time", "expires_at"):
             data[key] = data[key].isoformat()
         return data
 
@@ -41,8 +42,8 @@ def generate_buy_intents(
 ) -> list[BuyIntent]:
     """Generate at most the configured number of BUY intents per session.
 
-    The engine remains the sole source of strategy decisions. This layer only
-    serializes its BUY events for later tick-level paper execution.
+    The engine remains the sole source of strategy decisions. The exported
+    intent is valid only during the immediate confirmation M1 candle.
     """
     if not 0 < risk_fraction <= 1:
         raise ValueError("risk_fraction must be in (0, 1]")
@@ -61,16 +62,18 @@ def generate_buy_intents(
             event = engine.on_candle(candle)
             if not event or event.get("action") != "BUY":
                 continue
+            confirmation_time = event["confirmation_time"]
             intents.append(BuyIntent(
                 session=session,
-                time=event["confirmation_time"],
+                time=confirmation_time,
                 trigger=float(event["entry"]),
                 stop=float(event["stop"]),
                 target=float(event["target"]),
                 risk_fraction=risk_fraction,
                 spread=float(candle.spread),
                 signal_time=event["signal_time"],
-                confirmation_time=event["confirmation_time"],
+                confirmation_time=confirmation_time,
+                expires_at=confirmation_time + timedelta(minutes=1),
             ))
             break
     return intents

@@ -29,6 +29,11 @@ class DatasetReport:
 
 
 def validate_m1(candles: Iterable[Candle]) -> DatasetReport:
+    """Validate ordering, timestamps and intraday one-minute continuity.
+
+    Overnight/weekend/session-boundary gaps are not treated as missing M1
+    candles. Gaps are reported only within the same calendar date.
+    """
     rows = list(candles)
     if not rows:
         return DatasetReport(0, 0, 0, 0, 0.0, True, True)
@@ -42,7 +47,7 @@ def validate_m1(candles: Iterable[Candle]) -> DatasetReport:
     max_gap = timedelta(0)
     for previous, current in zip(rows, rows[1:]):
         delta = current.time - previous.time
-        if delta > timedelta(minutes=1):
+        if previous.time.date() == current.time.date() and delta > timedelta(minutes=1):
             gaps += 1
             max_gap = max(max_gap, delta)
 

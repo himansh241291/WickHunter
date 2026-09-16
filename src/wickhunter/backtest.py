@@ -4,8 +4,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
 from .engine import EngineConfig, WickHunterEngine
-from .models import Candle, Trade
-from .rules import reward_risk
+from .models import Candle
 
 
 @dataclass(frozen=True)
@@ -74,6 +73,15 @@ class WickHunterBacktester:
     def __init__(self, config: Optional[BacktestConfig] = None):
         self.config = config or BacktestConfig()
 
+    @staticmethod
+    def _resolve_exit(candle: Candle, stop: float, target: float):
+        """Resolve an exit from OHLC using a deterministic conservative model."""
+        if candle.low <= stop:
+            return stop, "LOSS"
+        if candle.high >= target:
+            return target, "WIN"
+        return None, None
+
     def run(self, sessions: dict[str, Iterable[Candle]], levels: dict[str, DailyLevels]) -> BacktestResult:
         equity = self.config.starting_equity
         result = BacktestResult(equity, equity)
@@ -97,8 +105,8 @@ class WickHunterBacktester:
                     max_trades_per_day=self.config.max_trades_per_day,
                 ),
             )
-
             pending = None
+
             for candle in candles:
                 if pending is None:
                     event = engine.on_candle(candle)
@@ -118,46 +126,55 @@ class WickHunterBacktester:
                             "target": target,
                             "quantity": quantity,
                         }
+                        # Entry is triggered intrabar. Therefore this same
+                        # confirmation candle may also reach SL/TP afterward.
+                        exit_price, exit_result = self._resolve_exit(candle, stop, target)
+                        if exit_result:
+                            self._record_trade(result, session, pending, candle, exit_price, exit_result, equity)
+                            equity += (exit_price - entry) * quantity
+                            pending = None
                     continue
 
-                exit_price = None
-                exit_result = None
-                # Conservative bar-only rule: if both stop and target occur in
-                # one candle, assume the stop was hit first. Tick data can later
-                # replace this execution model without changing signal logic.
-                if candle.low <= pending["stop"]:
-                    exit_price = pending["stop"]
-                    exit_result = "LOSS"
-                elif candle.high >= pending["target"]:
-                    exit_price = pending["target"]
-                    exit_result = "WIN"
-
+                exit_price, exit_result = self._resolve_exit(candle, pending["stop"], pending["target"])
                 if exit_result:
                     pnl = (exit_price - pending["entry"]) * pending["quantity"]
                     risk_cash = (pending["entry"] - pending["stop"]) * pending["quantity"]
                     equity += pnl
-                    result.trades.append(
-                        BacktestTrade(
-                            session=session,
-                            entry_time=pending["entry_time"],
-                            entry=pending["entry"],
-                            stop=pending["stop"],
-                            target=pending["target"],
-                            quantity=pending["quantity"],
-                            exit_time=candle.time,
-                            exit_price=exit_price,
-                            result=exit_result,
-                            pnl=pnl,
-                            r_multiple=pnl / risk_cash if risk_cash else 0.0,
-                        )
-                    )
+                    result.trades.append(BacktestTrade(
+                        session=session,
+                        entry_time=pending["entry_time"],
+                        entry=pending["entry"],
+                        stop=pending["stop"],
+                        target=pending["target"],
+                        quantity=pending["quantity"],
+                        exit_time=candle.time,
+                        exit_price=exit_price,
+                        result=exit_result,
+                        pnl=pnl,
+                        r_multiple=pnl / risk_cash if risk_cash else 0.0,
+                    ))
                     pending = None
 
-            # A live position cannot silently disappear at the end of a session.
-            # v0.1 marks it as rejected for incomplete bar-based data; explicit
-            # end-session liquidation will be added as a configurable model.
             if pending is not None:
                 result.rejected.append({"session": session, "reason": "OPEN_AT_SESSION_END"})
 
         result.ending_equity = equity
         return result
+
+    @staticmethod
+    def _record_trade(result, session, pending, candle, exit_price, exit_result, equity_before):
+        pnl = (exit_price - pending["entry"]) * pending["quantity"]
+        risk_cash = (pending["entry"] - pending["stop"]) * pending["quantity"]
+        result.trades.append(BacktestTrade(
+            session=session,
+            entry_time=pending["entry_time"],
+            entry=pending["entry"],
+            stop=pending["stop"],
+            target=pending["target"],
+            quantity=pending["quantity"],
+            exit_time=candle.time,
+            exit_price=exit_price,
+            result=exit_result,
+            pnl=pnl,
+            r_multiple=pnl / risk_cash if risk_cash else 0.0,
+        ))

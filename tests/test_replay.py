@@ -93,13 +93,13 @@ def test_replay_expired_intent_cannot_fill_on_later_tick():
     assert state.equity == state.starting_equity
 
 
-def test_replay_final_open_position_is_liquidated():
+def test_replay_final_open_position_is_liquidated(tmp_path):
     ticks = [
         Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
         Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 101),
         Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 102),
     ]
-    ledger = TradeLedger("/tmp/wickhunter-final-replay-ledger.jsonl")
+    ledger = TradeLedger(tmp_path / "final-replay-ledger.jsonl")
     state = replay_buy_intents(
         ticks,
         [{"time": "2026-01-02T09:00:00+00:00", "trigger": 101, "stop": 99, "target": 105}],

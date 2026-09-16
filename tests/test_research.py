@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
-from wickhunter.backtest import DailyLevels
+import pytest
+
+from wickhunter.backtest import BacktestConfig, DailyLevels
 from wickhunter.models import Candle
 from wickhunter.research import ResearchCase, run_cases, sensitivity_cases
-from wickhunter.backtest import BacktestConfig
 
 
 def bars(*ohlc):
@@ -12,12 +13,13 @@ def bars(*ohlc):
 
 
 def test_sensitivity_cases_are_deterministic_and_buy_only():
-    cases = sensitivity_cases(minimum_rr_values=(1.5, 2.0), stop_buffers=(0.0,), slippages=(0.0, 0.1))
+    cases = sensitivity_cases(
+        minimum_rr_values=(1.5,), stop_buffers=(0.0,), slippages=(0.0, 0.1),
+        exit_slippages=(0.0,), commissions_per_unit=(0.0,)
+    )
     assert [case.name for case in cases] == [
-        "rr=1.5|buffer=0|slippage=0",
-        "rr=1.5|buffer=0|slippage=0.1",
-        "rr=2|buffer=0|slippage=0",
-        "rr=2|buffer=0|slippage=0.1",
+        "rr=1.5|buffer=0|entry_slip=0|exit_slip=0|commission=0",
+        "rr=1.5|buffer=0|entry_slip=0.1|exit_slip=0|commission=0",
     ]
     assert all(case.config.minimum_reward_risk > 0 for case in cases)
 

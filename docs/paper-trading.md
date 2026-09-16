@@ -13,9 +13,11 @@ WickHunter keeps strategy decisions separate from execution and account risk. Th
 
 ## Ordered tick replay
 
-`paper-replay` treats an approved intent as an instruction that becomes eligible at its timestamp, not as an immediate fill. The first ordered tick at or above the BUY trigger fills the position. The observed tick price is used as the fill price before adverse entry slippage is applied, so a gap through the trigger is not silently filled at an unobserved price.
+`paper-replay` treats an approved intent as an instruction that becomes eligible after its confirmation-candle timestamp, not as an immediate fill. The first strictly later ordered tick at or above the BUY trigger fills the position. This prevents ticks belonging to the already-completed confirmation candle from leaking into execution. The observed tick price is used as the fill price before adverse entry slippage is applied, so a gap through the trigger is not silently filled at an unobserved price.
 
 Replay sessions are separated by the timestamp's local offset date. An open position is liquidated at the last tick of the previous date, daily trade/loss counters reset, and pending intents do not cross the session boundary.
+
+Tick CSV timestamps must be timezone-aware.
 
 ## Durable state and kill switch
 
@@ -23,7 +25,7 @@ Replay sessions are separated by the timestamp's local offset date. An open posi
 
 `recover_risk_state()` reconstructs equity, current-day P&L, current-day trade count, and consecutive losses from the event history. The caller supplies the as-of timestamp so a restart on a new trading day does not inherit the previous day's daily counters.
 
-On process restart, inspect the open-position snapshot and recover risk state before accepting a new BUY. An unresolved open position must be reconciled before new strategy orders are accepted. An engaged kill switch blocks new BUY entries until explicitly released.
+On process restart, inspect the open-position snapshot and recover risk state before accepting a new BUY. A persisted open position blocks new BUY entries until it is reconciled. An engaged kill switch blocks new BUY entries until explicitly released.
 
 ## Safety properties
 

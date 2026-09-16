@@ -32,18 +32,26 @@ class RiskState:
     trades_today: int = 0
     daily_pnl: float = 0.0
     consecutive_losses: int = 0
+    day_starting_equity: float | None = None
 
     def __post_init__(self):
         if self.starting_equity <= 0 or self.equity <= 0:
             raise ValueError("equity must be positive")
+        if self.day_starting_equity is None:
+            self.day_starting_equity = self.equity
+        if self.day_starting_equity <= 0:
+            raise ValueError("day_starting_equity must be positive")
 
     def reset_day(self):
         self.trades_today = 0
         self.daily_pnl = 0.0
+        self.day_starting_equity = self.equity
 
     def record_close(self, pnl: float):
         self.equity += pnl
         self.daily_pnl += pnl
+        if self.equity <= 0:
+            raise ValueError("equity cannot become non-positive")
         if pnl < 0:
             self.consecutive_losses += 1
         elif pnl > 0:
@@ -82,7 +90,7 @@ class BuyRiskGuard:
         if self.limits.max_consecutive_losses is not None and state.consecutive_losses >= self.limits.max_consecutive_losses:
             return RiskDecision(False, "max_consecutive_losses")
         if self.limits.max_daily_loss_fraction is not None:
-            loss_limit = state.starting_equity * self.limits.max_daily_loss_fraction
+            loss_limit = state.day_starting_equity * self.limits.max_daily_loss_fraction
             if state.daily_pnl <= -loss_limit:
                 return RiskDecision(False, "max_daily_loss")
         if self.limits.max_spread is not None and spread > self.limits.max_spread:

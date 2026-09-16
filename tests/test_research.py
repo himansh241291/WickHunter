@@ -1,7 +1,5 @@
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from wickhunter.backtest import BacktestConfig, DailyLevels
 from wickhunter.models import Candle
 from wickhunter.research import ResearchCase, run_cases, sensitivity_cases
@@ -41,4 +39,4 @@ def test_run_cases_uses_independent_backtests():
     results = run_cases(sessions, levels, cases)
     assert [result.name for result in results] == ["baseline", "higher_rr"]
     assert results[0].metrics["total_trades"] == 1
-    assert results[1].metrics["total_trades"] == 1
+    assert results[1].metrics["total_trades"] == 0

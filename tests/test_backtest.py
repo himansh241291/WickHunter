@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from wickhunter.backtest import BacktestConfig, DailyLevels, WickHunterBacktester
 from wickhunter.models import Candle
 
@@ -48,11 +50,19 @@ def test_two_consecutive_closes_below_pdl_invalidate_sweep():
     assert result.total_trades == 0
 
 
-def test_slippage_can_prevent_confirmation_fill():
+def test_entry_slippage_can_prevent_confirmation_fill():
     data = bars((100.5, 100.8, 99.0, 99.5), (99.5, 101.5, 99.2, 101.2), (101.2, 101.5, 101.0, 101.3))
-    result = WickHunterBacktester(BacktestConfig(slippage=0.1)).run({"2026-01-02": data}, levels(pdh=105.0))
+    result = WickHunterBacktester(BacktestConfig(entry_slippage=0.1)).run({"2026-01-02": data}, levels(pdh=105.0))
     assert result.total_trades == 0
     assert result.rejected[-1]["reason"] == "ENTRY_NOT_FILLED_SLIPPAGE"
+
+
+def test_execution_costs_reduce_net_pnl():
+    data = bars((100.5, 100.8, 99.0, 99.5), (99.5, 101.5, 99.2, 101.2), (101.2, 105.0, 101.0, 104.0), (104.0, 106.0, 103.8, 105.5))
+    clean = WickHunterBacktester().run({"2026-01-02": data}, levels())
+    costly = WickHunterBacktester(BacktestConfig(entry_slippage=0.1, exit_slippage=0.1, commission_per_unit=0.01)).run({"2026-01-02": data}, levels())
+    assert costly.trades[0].pnl < clean.trades[0].pnl
+    assert costly.trades[0].commission > 0
 
 
 def test_confirmation_candle_is_not_used_for_exit():

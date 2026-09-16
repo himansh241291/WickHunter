@@ -18,6 +18,7 @@ def test_recover_risk_state_rebuilds_equity_and_daily_counters(tmp_path):
     assert state.equity == 100_030
     assert state.trades_today == 1
     assert state.daily_pnl == 0
+    assert state.day_starting_equity == 100_030
     assert state.consecutive_losses == 0
 
 

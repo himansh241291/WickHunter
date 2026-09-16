@@ -16,7 +16,16 @@ def test_cli_backtest_writes_reports(tmp_path, monkeypatch, capsys):
     output = tmp_path / "reports"
     monkeypatch.setattr(
         "sys.argv",
-        ["wickhunter", "backtest", "--data", str(csv_path), "--output-dir", str(output)],
+        [
+            "wickhunter",
+            "backtest",
+            "--data",
+            str(csv_path),
+            "--output-dir",
+            str(output),
+            "--minimum-rr",
+            "1.0",
+        ],
     )
 
     assert main() == 0

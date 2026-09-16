@@ -18,10 +18,12 @@ def test_entry_uses_first_ordered_tick_at_trigger():
 
 def test_exit_uses_first_ordered_threshold():
     result = resolve_long_exit(ticks(101, 99, 105), stop=100, target=105)
-    assert result is None
-    result = resolve_long_exit(ticks(101, 100, 105), stop=100, target=105)
     assert result is not None
     assert result[1] == "LOSS"
+
+    result = resolve_long_exit(ticks(101, 105, 99), stop=100, target=105)
+    assert result is not None
+    assert result[1] == "WIN"
 
 
 def test_invalid_tick_execution_levels_rejected():

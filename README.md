@@ -52,13 +52,51 @@ CSV / future market-data adapter
   Risk / execution model
        |
        v
-   Trade ledger
+   Trade ledger + audit
        |
        v
  Performance metrics
 ```
 
-The strategy core has no broker SDK dependency. The current OHLC backtester deliberately starts exit evaluation on the candle after the intrabar SignalHigh entry trigger because OHLC bars cannot prove whether a stop or target was touched before or after entry. This avoids fabricating an intrabar sequence. A future tick-level execution model can replace this assumption without changing the signal rules.
+The strategy core has no broker SDK dependency. The current OHLC backtester deliberately starts exit evaluation on the candle after the intrabar SignalHigh entry trigger because OHLC bars cannot prove whether a stop or target was touched before or after entry. The baseline also liquidates an open position at the session's final close rather than carrying it into another session. A future tick-level execution model can replace these assumptions without changing the signal rules.
+
+## CLI
+
+Install the project and test dependencies:
+
+```bash
+python -m pip install -e ".[test]"
+```
+
+Run a backtest:
+
+```bash
+wickhunter backtest --data data/M1.csv --timezone Asia/Kolkata --output-dir reports
+```
+
+Optional research controls:
+
+```text
+--starting-equity
+--risk-fraction
+--minimum-rr
+--stop-buffer
+--slippage
+--max-trades-per-day
+--no-session-liquidation
+```
+
+The CLI writes:
+
+```text
+reports/
+├── summary.json
+├── trades.csv
+├── rejected.csv
+└── audit.csv
+```
+
+The audit ledger records executed BUYs, exits, and rejected executions. The baseline backtester uses deterministic stop-first ordering when both stop and target are touched inside the same OHLC candle.
 
 ## Data format
 
@@ -76,7 +114,6 @@ Timestamps must be timezone-aware. `prepare_sessions()` can group candles by an 
 Run locally:
 
 ```bash
-python -m pip install -e ".[test]"
 pytest -q
 ```
 
@@ -84,4 +121,4 @@ GitHub Actions runs the test suite on pushes to `main` and pull requests.
 
 ## Status
 
-Deterministic v0.1 rulebook + portable strategy engine + backtest engine + session-aware CSV pipeline + unit tests are implemented. Historical validation and execution-realism work are next; no live-trading defaults should be inferred from the current code.
+Deterministic v0.1 rulebook + portable strategy engine + session-aware CSV pipeline + research backtester + audit ledger + CLI reporting are implemented. Next build stage is historical-data ingestion and execution-cost realism, followed by out-of-sample validation. No live-trading defaults should be inferred from the current code.

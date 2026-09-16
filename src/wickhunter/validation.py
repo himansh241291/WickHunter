@@ -16,27 +16,35 @@ class DatasetReport:
     max_gap_minutes: float
     timezone_aware: bool
     monotonic: bool
+    strict_continuity: bool = False
 
     @property
     def valid(self) -> bool:
+        """Return structural validity; normal session gaps are not failures."""
         return (
             self.candles > 0
             and self.duplicates == 0
-            and self.gaps == 0
             and self.timezone_aware
             and self.monotonic
+            and (not self.strict_continuity or self.gaps == 0)
         )
 
 
-def validate_m1(candles: Iterable[Candle]) -> DatasetReport:
-    """Validate ordering, timestamps and intraday one-minute continuity.
+def validate_m1(
+    candles: Iterable[Candle],
+    *,
+    strict_continuity: bool = False,
+) -> DatasetReport:
+    """Validate timestamps and report intraday M1 continuity gaps.
 
-    Overnight/weekend/session-boundary gaps are not treated as missing M1
-    candles. Gaps are reported only within the same calendar date.
+    Market data normally contains overnight/weekend/session-boundary gaps, so
+    gaps are informational by default. ``strict_continuity=True`` is available
+    for synthetic datasets or feeds where every consecutive row must be one
+    minute apart within a calendar session.
     """
     rows = list(candles)
     if not rows:
-        return DatasetReport(0, 0, 0, 0, 0.0, True, True)
+        return DatasetReport(0, 0, 0, 0, 0.0, True, True, strict_continuity)
 
     timestamps = [c.time for c in rows]
     duplicates = len(timestamps) - len(set(timestamps))
@@ -60,4 +68,5 @@ def validate_m1(candles: Iterable[Candle]) -> DatasetReport:
         max_gap_minutes=max_gap.total_seconds() / 60.0,
         timezone_aware=aware,
         monotonic=monotonic,
+        strict_continuity=strict_continuity,
     )

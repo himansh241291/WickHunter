@@ -60,3 +60,21 @@ def test_replay_does_not_fill_when_trigger_is_never_reached():
     )
     assert state.trades_today == 0
     assert state.equity == state.starting_equity
+
+
+def test_replay_resets_daily_trade_limit_at_session_boundary():
+    ticks = [
+        Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 105),
+        Tick(datetime(2026, 1, 3, 9, 0, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 3, 9, 1, tzinfo=timezone.utc), 102),
+        Tick(datetime(2026, 1, 3, 9, 2, tzinfo=timezone.utc), 106),
+    ]
+    intents = [
+        {"time": "2026-01-02T09:00:00+00:00", "trigger": 101, "stop": 99, "target": 105},
+        {"time": "2026-01-03T09:00:00+00:00", "trigger": 102, "stop": 100, "target": 106},
+    ]
+    state = replay_buy_intents(ticks, intents)
+    assert state.trades_today == 1
+    assert state.equity > state.starting_equity

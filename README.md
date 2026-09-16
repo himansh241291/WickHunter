@@ -58,7 +58,7 @@ CSV / future market-data adapter
  Performance metrics
 ```
 
-The strategy core has no broker SDK dependency. The current bar-based backtester uses a deterministic conservative OHLC exit model: if both SL and TP are touched within one candle, SL is assumed first. Tick-level execution can later be added as a separate execution model without changing the signal rules.
+The strategy core has no broker SDK dependency. The current OHLC backtester deliberately starts exit evaluation on the candle after the intrabar SignalHigh entry trigger because OHLC bars cannot prove whether a stop or target was touched before or after entry. This avoids fabricating an intrabar sequence. A future tick-level execution model can replace this assumption without changing the signal rules.
 
 ## Data format
 
@@ -69,7 +69,7 @@ time,open,high,low,close,spread
 2026-01-02T09:00:00+00:00,100.5,100.8,99.0,99.5,0.1
 ```
 
-Timezone-aware timestamps are strongly recommended.
+Timestamps must be timezone-aware. `prepare_sessions()` can group candles by an explicit IANA timezone and derive PDH/PDL from the immediately preceding available completed session without using current/future candles.
 
 ## Tests
 
@@ -84,4 +84,4 @@ GitHub Actions runs the test suite on pushes to `main` and pull requests.
 
 ## Status
 
-Deterministic v0.1 rulebook + portable strategy engine + first backtest engine + unit tests are now implemented. Historical validation and execution-realism work are next; no live-trading defaults should be inferred from the current code.
+Deterministic v0.1 rulebook + portable strategy engine + backtest engine + session-aware CSV pipeline + unit tests are implemented. Historical validation and execution-realism work are next; no live-trading defaults should be inferred from the current code.

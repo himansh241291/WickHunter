@@ -1,3 +1,5 @@
+import json
+
 from wickhunter.cli import main
 
 
@@ -14,20 +16,8 @@ def test_cli_backtest_writes_reports(tmp_path, monkeypatch, capsys):
         encoding="utf-8",
     )
     output = tmp_path / "reports"
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "wickhunter",
-            "backtest",
-            "--data",
-            str(csv_path),
-            "--output-dir",
-            str(output),
-            "--minimum-rr",
-            "1.0",
-        ],
-    )
-
+    monkeypatch.setattr("sys.argv", ["wickhunter", "backtest", "--data", str(csv_path),
+        "--output-dir", str(output), "--minimum-rr", "1.0"])
     assert main() == 0
     captured = capsys.readouterr()
     assert '"total_trades": 1' in captured.out
@@ -35,3 +25,19 @@ def test_cli_backtest_writes_reports(tmp_path, monkeypatch, capsys):
     assert (output / "trades.csv").exists()
     assert (output / "rejected.csv").exists()
     assert (output / "audit.csv").exists()
+
+
+def test_cli_paper_replay_writes_ledger(tmp_path, monkeypatch, capsys):
+    ticks = tmp_path / "ticks.csv"
+    ticks.write_text("time,price\n2026-01-02T09:00:00+00:00,100\n"
+                     "2026-01-02T09:01:00+00:00,101\n"
+                     "2026-01-02T09:02:00+00:00,105\n", encoding="utf-8")
+    intents = tmp_path / "intents.json"
+    intents.write_text(json.dumps([{"time": "2026-01-02T09:01:00+00:00",
+        "trigger": 101, "stop": 99, "target": 105}]), encoding="utf-8")
+    ledger = tmp_path / "ledger.jsonl"
+    monkeypatch.setattr("sys.argv", ["wickhunter", "paper-replay", "--ticks", str(ticks),
+        "--intents", str(intents), "--ledger", str(ledger)])
+    assert main() == 0
+    assert ledger.exists()
+    assert "POSITION_CLOSED" in ledger.read_text(encoding="utf-8")

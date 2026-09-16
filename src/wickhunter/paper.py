@@ -51,6 +51,8 @@ class PaperBroker:
                    requested_risk_fraction: float, spread: float = 0.0) -> PaperPosition | None:
         if self.position is not None:
             return self._reject(time, "position_already_open")
+        if self.ledger is not None and self.ledger.snapshot()["open_position"] is not None:
+            return self._reject(time, "unreconciled_open_position")
         if self.kill_switch is not None and not self.kill_switch.allow_buy():
             return self._reject(time, "kill_switch_engaged")
         if target <= trigger:

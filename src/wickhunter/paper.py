@@ -47,6 +47,31 @@ class PaperBroker:
         self.position: PaperPosition | None = None
         self.audit: list[dict] = []
 
+    def restore_open_position(self, snapshot: dict) -> PaperPosition:
+        """Restore a persisted BUY position without creating a new order."""
+        if self.position is not None:
+            raise RuntimeError("position already open")
+        required = {"entry_time", "entry", "stop", "target", "quantity"}
+        missing = required.difference(snapshot)
+        if missing:
+            raise ValueError(f"incomplete persisted position: {sorted(missing)}")
+        entry_time = datetime.fromisoformat(snapshot["entry_time"])
+        if entry_time.tzinfo is None or entry_time.utcoffset() is None:
+            raise ValueError("persisted position timestamp must be timezone-aware")
+        position = PaperPosition(
+            entry_time=entry_time,
+            entry=float(snapshot["entry"]),
+            stop=float(snapshot["stop"]),
+            target=float(snapshot["target"]),
+            quantity=float(snapshot["quantity"]),
+        )
+        if position.quantity <= 0 or position.stop >= position.entry or position.target <= position.entry:
+            raise ValueError("invalid persisted BUY position geometry")
+        self.position = position
+        self.audit.append({"time": entry_time, "event": "POSITION_RESTORED", "entry": position.entry,
+                           "stop": position.stop, "target": position.target, "quantity": position.quantity})
+        return position
+
     def submit_buy(self, *, time: datetime, trigger: float, stop: float, target: float,
                    requested_risk_fraction: float, spread: float = 0.0) -> PaperPosition | None:
         if self.position is not None:

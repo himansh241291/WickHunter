@@ -149,13 +149,15 @@ def test_replay_resets_daily_trade_limit_at_session_boundary():
 
 def test_replay_uses_explicit_session_timezone_for_day_boundary():
     ticks = [
-        Tick(datetime(2026, 1, 2, 18, 29, tzinfo=timezone.utc), 100),
-        Tick(datetime(2026, 1, 2, 18, 31, tzinfo=timezone.utc), 101),
-        Tick(datetime(2026, 1, 2, 18, 32, tzinfo=timezone.utc), 105),
-        Tick(datetime(2026, 1, 2, 18, 31, 30, tzinfo=timezone.utc), 102),
+        Tick(datetime(2026, 1, 2, 18, 28, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 2, 18, 29, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 18, 31, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 2, 18, 32, tzinfo=timezone.utc), 102),
     ]
     intents = [
-        {"time": "2026-01-02T18:29:00+00:00", "trigger": 101, "stop": 99, "target": 105},
+        {"time": "2026-01-02T18:28:00+00:00", "trigger": 101, "stop": 99, "target": 105},
+        {"time": "2026-01-02T18:31:00+00:00", "trigger": 102, "stop": 100, "target": 106},
     ]
     state = replay_buy_intents(ticks, intents, timezone_name="Asia/Kolkata")
     assert state.trades_today == 1
+    assert state.equity > state.starting_equity

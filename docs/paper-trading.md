@@ -13,9 +13,11 @@ WickHunter keeps strategy decisions separate from execution and account risk. Th
 
 ## Ordered tick replay
 
-`paper-replay` treats an approved intent as an instruction that becomes eligible after its confirmation-candle timestamp, not as an immediate fill. The first strictly later ordered tick at or above the BUY trigger fills the position. This prevents ticks belonging to the already-completed confirmation candle from leaking into execution. The observed tick price is used as the fill price before adverse entry slippage is applied, so a gap through the trigger is not silently filled at an unobserved price.
+`paper-replay` treats an approved intent as an instruction that becomes eligible at its confirmation timestamp, not as an immediate fill. The first strictly later ordered tick at or above the BUY trigger fills the position. The observed tick price is used as the fill price before adverse entry slippage is applied, so a gap through the trigger is not silently filled at an unobserved price.
 
-Replay sessions are separated by the timestamp's local offset date. An open position is liquidated at the last tick of the previous date, daily trade/loss counters reset, and pending intents do not cross the session boundary.
+A BUY intent carries an explicit `expires_at` equal to the start of the next M1 candle. Ticks at or after that boundary cannot fill the intent. Older intent files without `expires_at` use a one-minute compatibility expiry.
+
+Replay sessions are separated by the timestamp's local offset date. An open position is liquidated at the last tick of the previous date, daily trade/loss counters reset, and pending intents do not cross the session boundary. If the input ends with an open position, the final observed tick is used for deterministic session-end liquidation.
 
 Tick CSV timestamps must be timezone-aware.
 
@@ -23,9 +25,15 @@ Tick CSV timestamps must be timezone-aware.
 
 `TradeLedger` stores append-only JSONL events and uses flush + `fsync` for each write. `TradeLedger.snapshot()` reconstructs whether a BUY position is still open and whether the persistent kill switch is engaged.
 
-`recover_risk_state()` reconstructs equity, current-day P&L, current-day trade count, and consecutive losses from the event history. The caller supplies the as-of timestamp so a restart on a new trading day does not inherit the previous day's daily counters.
+`recover_risk_state()` reconstructs equity, current-day P&L, current-day trade count, day-start equity, and consecutive losses from the event history. The caller supplies the as-of timestamp so a restart on a new trading day does not inherit the previous day's daily counters.
 
 On process restart, inspect the open-position snapshot and recover risk state before accepting a new BUY. A persisted open position blocks new BUY entries until it is reconciled. An engaged kill switch blocks new BUY entries until explicitly released.
+
+## Risk accounting
+
+Daily loss limits are measured against the equity at the start of the current trading day, not the original account equity. A profitable prior day therefore does not distort the next day's percentage loss limit.
+
+Entry slippage is applied before final target validation. If adverse entry slippage moves the executable entry to or above the target, the BUY is rejected rather than creating a position with invalid long geometry.
 
 ## Safety properties
 
@@ -36,6 +44,7 @@ On process restart, inspect the open-position snapshot and recover risk state be
 - Daily and consecutive-loss limits block new BUY entries rather than altering an existing strategy signal.
 - Execution costs are explicit and adverse to the simulated long position.
 - Corrupt ledger records raise an error rather than silently producing a false recovery state.
+- Expired BUY intents cannot be resurrected by later market prices.
 
 ## Broker-neutral boundary
 

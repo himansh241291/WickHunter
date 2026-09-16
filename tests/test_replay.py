@@ -151,8 +151,10 @@ def test_replay_uses_explicit_session_timezone_for_day_boundary():
     ticks = [
         Tick(datetime(2026, 1, 2, 18, 27, tzinfo=timezone.utc), 100),
         Tick(datetime(2026, 1, 2, 18, 28, tzinfo=timezone.utc), 101),
+        Tick(datetime(2026, 1, 2, 18, 28, 30, tzinfo=timezone.utc), 105),
         Tick(datetime(2026, 1, 2, 18, 31, tzinfo=timezone.utc), 100),
         Tick(datetime(2026, 1, 2, 18, 32, tzinfo=timezone.utc), 102),
+        Tick(datetime(2026, 1, 2, 18, 32, 30, tzinfo=timezone.utc), 106),
     ]
     intents = [
         {"time": "2026-01-02T18:27:00+00:00", "trigger": 101, "stop": 99, "target": 105, "expires_at": "2026-01-02T18:29:00+00:00"},

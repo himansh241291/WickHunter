@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .backtest import BacktestConfig, WickHunterBacktester
 from .data import load_m1_csv, prepare_sessions
+from .intents import generate_buy_intents, intents_to_jsonable
 from .metrics import summarize
 from .research import sensitivity_cases, run_cases
 from .replay import load_ticks, replay_buy_intents
@@ -53,6 +54,14 @@ def build_parser():
     research.add_argument("--train-size", type=int, default=0)
     research.add_argument("--test-size", type=int, default=0)
     research.add_argument("--step", type=int, default=None)
+
+    intents = sub.add_parser("generate-intents", help="export strategy-generated BUY intents from M1 data")
+    _data_args(intents)
+    intents.add_argument("--output", required=True, help="JSON output path")
+    intents.add_argument("--minimum-rr", type=float, default=1.5)
+    intents.add_argument("--stop-buffer", type=float, default=0.0)
+    intents.add_argument("--max-trades-per-day", type=int, default=1)
+    intents.add_argument("--risk-fraction", type=float, default=0.01)
 
     replay = sub.add_parser("paper-replay", help="replay approved BUY intents against ordered ticks")
     replay.add_argument("--ticks", required=True, help="tick CSV with time,price columns")
@@ -134,6 +143,24 @@ def run_research(args):
     return 0
 
 
+def run_generate_intents(args):
+    candles = load_m1_csv(args.data)
+    sessions, levels = prepare_sessions(candles, timezone_name=args.timezone)
+    intents = generate_buy_intents(
+        sessions, levels,
+        minimum_reward_risk=args.minimum_rr,
+        stop_buffer=args.stop_buffer,
+        max_trades_per_day=args.max_trades_per_day,
+        risk_fraction=args.risk_fraction,
+    )
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(intents_to_jsonable(intents), indent=2), encoding="utf-8")
+    print(f"BUY intents: {len(intents)}")
+    print(f"Wrote {output.resolve()}")
+    return 0
+
+
 def run_paper_replay(args):
     ticks = load_ticks(args.ticks)
     intents = json.loads(Path(args.intents).read_text(encoding="utf-8"))
@@ -154,6 +181,7 @@ def main():
     if args.command == "backtest": return run_backtest(args)
     if args.command == "validate": return run_validate(args)
     if args.command == "research": return run_research(args)
+    if args.command == "generate-intents": return run_generate_intents(args)
     if args.command == "paper-replay": return run_paper_replay(args)
     return 2
 

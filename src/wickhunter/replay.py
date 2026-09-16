@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from .ledger import TradeLedger
 from .paper import PaperBroker
 from .risk import BuyRiskGuard, RiskLimits, RiskState
-from .safety import KillSwitch
+from .safety import KillSwitch, recover_open_position, recover_risk_state
 from .tick import Tick
 
 
@@ -49,8 +49,9 @@ def replay_buy_intents(
     risk_limits: RiskLimits | None = None,
     ledger: TradeLedger | None = None,
     timezone_name: str = "UTC",
+    resume: bool = False,
 ) -> RiskState:
-    """Replay pre-approved BUY intents against ordered ticks.
+    """Replay approved BUY intents against ordered ticks.
 
     An intent is eligible only during its immediate confirmation M1 candle.
     It fills on the first strictly later ordered tick before expiry that
@@ -59,11 +60,23 @@ def replay_buy_intents(
     price.
 
     Session boundaries are determined in the supplied IANA timezone rather
-    than from the source timestamp's UTC date. This keeps daily risk limits
-    aligned with the same session calendar used by strategy data preparation.
+    than from the source timestamp's UTC date. With ``resume=True``, the
+    ledger is the source of truth for account state and an open BUY position
+    is restored before replay continues. A persisted position must have a
+    matching session in the supplied tick stream; otherwise replay fails
+    closed instead of guessing an overnight liquidation price.
     """
     session_tz = ZoneInfo(timezone_name)
-    state = RiskState(starting_equity=starting_equity, equity=starting_equity)
+    if not ticks:
+        raise ValueError("at least one tick is required for replay")
+    if resume and ledger is None:
+        raise ValueError("resume requires a ledger")
+
+    if resume:
+        state = recover_risk_state(ledger, starting_equity=starting_equity, as_of=ticks[-1].time)
+    else:
+        state = RiskState(starting_equity=starting_equity, equity=starting_equity)
+
     switch = KillSwitch(ledger) if ledger else None
     broker = PaperBroker(
         state,
@@ -71,6 +84,15 @@ def replay_buy_intents(
         ledger=ledger,
         kill_switch=switch,
     )
+    if resume and ledger is not None:
+        persisted = recover_open_position(ledger)
+        if persisted is not None:
+            broker.restore_open_position(persisted)
+            entry_session = datetime.fromisoformat(persisted["entry_time"]).astimezone(session_tz).date()
+            first_session = ticks[0].time.astimezone(session_tz).date()
+            if entry_session != first_session:
+                raise ValueError("resume tick stream must include the open position's session")
+
     intent_by_time = sorted(intents, key=lambda item: datetime.fromisoformat(item["time"]))
     pending: list[dict] = []
     index = 0

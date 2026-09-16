@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The strategy rules and the execution model are separate. This prevents a
+The strategy rules and execution model are separate. This prevents a
 backtest from silently changing the setup when transaction-cost assumptions
 change.
 
@@ -28,16 +28,20 @@ For a long position:
 
 ## Costs
 
-Commission can be configured as a per-unit round trip cost. The execution
-module applies it to both entry and exit.
+Commission can be configured as a per-unit round-trip cost. The execution
+module applies it once for entry and once for exit.
+
+## Tick-level execution
+
+When ordered tick data is available, `wickhunter.tick` can resolve the first
+observed BUY trigger and the first observed stop/target threshold. This removes
+the OHLC ambiguity while keeping the strategy signal rules unchanged.
+
+The tick resolver is deliberately a primitive rather than a second strategy:
+it contains no indicators, signal generation, short entries, or optimization.
 
 ## Session boundary
 
 An open position is liquidated at the final candle close by default. This is a
 research convention for producing a finite daily result, not a claim about
 live-market execution.
-
-## Tick-level upgrade path
-
-When tick data is available, the execution layer should replace OHLC ambiguity
-with the observed sequence of prices. The signal rules must remain unchanged.

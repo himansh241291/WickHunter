@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from wickhunter.ledger import TradeLedger
 from wickhunter.replay import load_ticks, replay_buy_intents
 from wickhunter.tick import Tick
@@ -15,6 +17,13 @@ def test_load_ticks_orders_input(tmp_path):
     )
     ticks = load_ticks(path)
     assert ticks[0].price == 101
+
+
+def test_load_ticks_rejects_naive_timestamp(tmp_path):
+    path = tmp_path / "ticks.csv"
+    path.write_text("time,price\n2026-01-02T09:00:00,100\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="timezone-aware"):
+        load_ticks(path)
 
 
 def test_replay_buy_intent_closes_on_target(tmp_path):

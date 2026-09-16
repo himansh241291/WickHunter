@@ -31,6 +31,48 @@ def recover_open_position(ledger: TradeLedger) -> dict | None:
     return ledger.snapshot()["open_position"]
 
 
+def recover_risk_state(
+    ledger: TradeLedger,
+    *,
+    starting_equity: float,
+    as_of: datetime | None = None,
+) -> RiskState:
+    """Reconstruct account/risk counters from the append-only ledger.
+
+    The caller supplies the current/as-of timestamp so a restart on a new
+    trading day resets daily counters without mutating historical events.
+    """
+    events = ledger.events()
+    if as_of is None:
+        as_of = events[-1].time if events else datetime.now().astimezone()
+
+    equity = starting_equity
+    daily_pnl = 0.0
+    trades_today = 0
+    consecutive_losses = 0
+    for item in events:
+        if item.event == "BUY_FILLED":
+            if item.time.date() == as_of.date():
+                trades_today += 1
+        elif item.event == "POSITION_CLOSED":
+            pnl = float(item.data.get("net_pnl", 0.0))
+            equity += pnl
+            if item.time.date() == as_of.date():
+                daily_pnl += pnl
+            if pnl < 0:
+                consecutive_losses += 1
+            elif pnl > 0:
+                consecutive_losses = 0
+
+    return RiskState(
+        starting_equity=starting_equity,
+        equity=equity,
+        trades_today=trades_today,
+        daily_pnl=daily_pnl,
+        consecutive_losses=consecutive_losses,
+    )
+
+
 def operational_buy_allowed(
     *,
     kill_switch: KillSwitch,

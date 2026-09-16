@@ -53,10 +53,10 @@ def replay_buy_intents(
     """Replay pre-approved BUY intents against ordered ticks.
 
     An intent is eligible only during its immediate confirmation M1 candle.
-    It fills on the first ordered tick at/after its intent timestamp and
-    before expiry that reaches the BUY trigger. The observed tick price is
-    the fill price, so gap-through-trigger execution is modeled without
-    inventing an unobserved price.
+    It fills on the first strictly later ordered tick before expiry that
+    reaches the BUY trigger. The observed tick price is the fill price, so
+    gap-through-trigger execution is modeled without inventing an unobserved
+    price.
 
     Session boundaries are determined in the supplied IANA timezone rather
     than from the source timestamp's UTC date. This keeps daily risk limits
@@ -97,7 +97,8 @@ def replay_buy_intents(
 
         if broker.position is None:
             for intent in pending:
-                if tick.price < float(intent["trigger"]):
+                intent_time = datetime.fromisoformat(intent["time"])
+                if tick.time <= intent_time or tick.price < float(intent["trigger"]):
                     continue
                 submitted = broker.submit_buy(
                     time=tick.time,

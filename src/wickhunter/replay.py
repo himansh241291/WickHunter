@@ -62,9 +62,9 @@ def replay_buy_intents(
     Session boundaries are determined in the supplied IANA timezone rather
     than from the source timestamp's UTC date. With ``resume=True``, the
     ledger is the source of truth for account state and an open BUY position
-    is restored before replay continues. A persisted position must have a
-    matching session in the supplied tick stream; otherwise replay fails
-    closed instead of guessing an overnight liquidation price.
+    is restored before replay continues. Previously processed intents are
+    ignored using the ledger's last event timestamp, while unrecorded pending
+    intents are discarded on restart rather than guessed back into existence.
     """
     session_tz = ZoneInfo(timezone_name)
     if not ticks:
@@ -72,7 +72,10 @@ def replay_buy_intents(
     if resume and ledger is None:
         raise ValueError("resume requires a ledger")
 
-    if resume:
+    cutoff: datetime | None = None
+    if resume and ledger is not None:
+        last_event = ledger.latest()
+        cutoff = last_event.time if last_event is not None else None
         state = recover_risk_state(ledger, starting_equity=starting_equity, as_of=ticks[-1].time)
     else:
         state = RiskState(starting_equity=starting_equity, equity=starting_equity)
@@ -94,12 +97,20 @@ def replay_buy_intents(
                 raise ValueError("resume tick stream must include the open position's session")
 
     intent_by_time = sorted(intents, key=lambda item: datetime.fromisoformat(item["time"]))
+    if cutoff is not None:
+        intent_by_time = [
+            item for item in intent_by_time
+            if datetime.fromisoformat(item["time"]) > cutoff
+        ]
+
     pending: list[dict] = []
     index = 0
     previous_tick: Tick | None = None
     session_date = None
 
     for tick in ticks:
+        if cutoff is not None and tick.time <= cutoff:
+            continue
         tick_session_date = tick.time.astimezone(session_tz).date()
         if session_date is None:
             session_date = tick_session_date

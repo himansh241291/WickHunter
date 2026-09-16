@@ -1,0 +1,54 @@
+# WickHunter configuration baseline
+# Values marked null are intentionally unresolved until the rulebook is finalized.
+
+strategy:
+  name: WickHunter
+  version: 0.1.0
+  direction: LONG_ONLY
+  execution_timeframe: M1
+
+levels:
+  reference: PREVIOUS_COMPLETED_DAY_LOW
+  timezone: null
+
+sweep:
+  minimum_depth: null
+  depth_unit: null
+  reclaim_required: null
+
+signal:
+  type: BULLISH_REVERSAL
+  minimum_body: null
+  close_location: null
+
+confirmation:
+  trigger: SIGNAL_CANDLE_HIGH
+  expiration_candles: 1
+
+risk:
+  risk_per_trade_percent: null
+  maximum_trades_per_day: null
+  maximum_daily_loss_percent: null
+  maximum_consecutive_losses: null
+
+stop:
+  model: SWEEP_LOW
+  buffer: null
+
+target:
+  model: null
+  level: null
+  minimum_reward_risk: null
+
+filters:
+  session_start: null
+  session_end: null
+  maximum_spread: null
+  volatility_filter: null
+  news_filter: null
+
+execution:
+  order_type: MARKET
+  slippage_tolerance: null
+
+# SELL/SHORT configuration intentionally does not exist.

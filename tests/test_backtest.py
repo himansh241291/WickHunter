@@ -13,11 +13,11 @@ def test_buy_setup_reaches_target():
     data = bars(
         (100.5, 100.8, 99.0, 99.5),
         (99.5, 101.5, 99.2, 101.2),
-        (101.2, 105.0, 101.0, 104.5),
+        (101.2, 106.0, 101.0, 105.5),
     )
     result = WickHunterBacktester().run(
         {"2026-01-02": data},
-        {"2026-01-02": DailyLevels("2026-01-02", pdh=105.0, pdl=100.0)},
+        {"2026-01-02": DailyLevels("2026-01-02", pdh=106.0, pdl=100.0)},
     )
     assert result.total_trades == 1
     assert result.trades[0].result == "WIN"
@@ -48,11 +48,11 @@ def test_long_trade_has_positive_risk_and_target():
     data = bars(
         (100.2, 100.5, 98.5, 99.0),
         (99.0, 102.0, 98.8, 101.8),
-        (101.8, 104.0, 101.5, 103.0),
+        (101.8, 108.0, 101.5, 107.0),
     )
     result = WickHunterBacktester().run(
         {"2026-01-02": data},
-        {"2026-01-02": DailyLevels("2026-01-02", pdh=105.0, pdl=100.0)},
+        {"2026-01-02": DailyLevels("2026-01-02", pdh=108.0, pdl=100.0)},
     )
     trade = result.trades[0]
     assert trade.entry > trade.stop

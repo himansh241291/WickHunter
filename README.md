@@ -80,6 +80,17 @@ Run a backtest:
 wickhunter backtest --data data/M1.csv --timezone Asia/Kolkata --output-dir reports
 ```
 
+Export strategy-generated BUY intents for tick-level execution:
+
+```bash
+wickhunter generate-intents \
+  --data data/M1.csv \
+  --timezone Asia/Kolkata \
+  --output data/buy-intents.json
+```
+
+The intent exporter uses the same WickHunter state machine and previous-day levels as the strategy backtester. It emits only approved BUY intents; it does not contain a second signal-generation implementation.
+
 Run dataset validation:
 
 ```bash
@@ -112,7 +123,7 @@ wickhunter paper-replay \
   --ledger reports/paper-ledger.jsonl
 ```
 
-The tick CSV requires `time,price`. Intent JSON is an array containing `time`, `trigger`, `stop`, and `target`, with optional `risk_fraction` and `spread`. The replay harness does not generate signals; it executes only already-approved BUY intents.
+The tick CSV requires `time,price`. Intent JSON is an array containing `time`, `trigger`, `stop`, and `target`, with optional `risk_fraction` and `spread`. The replay harness waits for the first ordered tick reaching the trigger and uses the observed tick price for the fill. It does not generate signals.
 
 Backtest execution-cost controls:
 
@@ -126,7 +137,7 @@ The CLI writes JSON and CSV reports containing metrics, trades, rejections, audi
 
 ## Durable paper-trading safety
 
-Paper execution supports an append-only JSONL ledger with flush+fsync durability, restart inspection, and a persistent kill switch. Before resuming after a process restart, recover the ledger snapshot and reconcile any open position before accepting a new BUY. An engaged kill switch blocks new BUY entries.
+Paper execution supports an append-only JSONL ledger with flush+fsync durability, restart inspection, durable risk-state reconstruction, and a persistent kill switch. Before resuming after a process restart, recover the ledger snapshot and risk state and reconcile any open position before accepting a new BUY. An engaged kill switch blocks new BUY entries.
 
 ## Data format
 
@@ -159,4 +170,4 @@ GitHub Actions runs the test suite on pushes to `main` and pull requests.
 
 ## Status
 
-Deterministic v0.1 rulebook + portable strategy engine + session-aware CSV pipeline + execution-cost model + audit ledger + CLI + sensitivity research + rolling walk-forward + ordered-tick execution + paper broker + durable paper ledger/recovery + kill switch + paper replay CLI are implemented. No live-trading defaults should be inferred from the current code.
+Deterministic v0.1 rulebook + portable strategy engine + session-aware CSV pipeline + execution-cost model + audit ledger + CLI + sensitivity research + rolling walk-forward + ordered-tick execution + paper broker + durable paper ledger/risk recovery + kill switch + strategy-to-paper BUY intent export + paper replay CLI are implemented. No live-trading defaults should be inferred from the current code.

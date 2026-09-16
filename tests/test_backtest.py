@@ -61,3 +61,21 @@ def test_confirmation_candle_is_not_used_for_exit():
     assert result.total_trades == 1
     assert result.trades[0].result == "LOSS"
     assert result.trades[0].exit_time == data[3].time
+
+
+def test_open_trade_is_liquidated_at_session_end():
+    data = bars((100.5, 100.8, 99.0, 99.5), (99.5, 101.5, 99.2, 101.2), (101.2, 103.0, 101.0, 102.0))
+    result = WickHunterBacktester().run({"2026-01-02": data}, levels(pdh=106.0))
+    assert result.total_trades == 1
+    trade = result.trades[0]
+    assert trade.result == "SESSION_CLOSE"
+    assert trade.exit_time == data[-1].time
+    assert trade.exit_price == data[-1].close
+    assert result.rejected == []
+
+
+def test_audit_records_buy_and_exit():
+    data = bars((100.5, 100.8, 99.0, 99.5), (99.5, 101.5, 99.2, 101.2), (101.2, 106.0, 101.0, 105.0), (105.0, 106.0, 104.0, 105.5))
+    result = WickHunterBacktester().run({"2026-01-02": data}, levels())
+    assert [event["event"] for event in result.audit] == ["BUY", "EXIT"]
+    assert result.audit[1]["result"] == "WIN"

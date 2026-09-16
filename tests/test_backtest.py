@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from wickhunter.backtest import BacktestConfig, DailyLevels, WickHunterBacktester
+from wickhunter.backtest import DailyLevels, WickHunterBacktester
 from wickhunter.models import Candle
 
 
@@ -11,9 +11,9 @@ def bars(*ohlc):
 
 def test_buy_setup_reaches_target():
     data = bars(
-        (100.5, 100.8, 99.0, 99.5),  # sweep below PDL=100
-        (99.5, 101.5, 99.2, 101.2),   # bullish reclaim signal
-        (101.2, 105.0, 101.0, 104.5),  # confirmation + target
+        (100.5, 100.8, 99.0, 99.5),
+        (99.5, 101.5, 99.2, 101.2),
+        (101.2, 105.0, 101.0, 104.5),
     )
     result = WickHunterBacktester().run(
         {"2026-01-02": data},
@@ -58,3 +58,18 @@ def test_long_trade_has_positive_risk_and_target():
     assert trade.entry > trade.stop
     assert trade.target > trade.entry
     assert trade.quantity > 0
+
+
+def test_two_consecutive_closes_below_pdl_invalidate_sweep():
+    data = bars(
+        (100.5, 100.8, 99.0, 99.5),
+        (99.5, 99.9, 98.5, 99.0),
+        (99.0, 99.5, 98.2, 98.7),
+        (98.7, 102.0, 98.0, 101.8),
+        (101.8, 103.0, 101.5, 102.5),
+    )
+    result = WickHunterBacktester().run(
+        {"2026-01-02": data},
+        {"2026-01-02": DailyLevels("2026-01-02", pdh=105.0, pdl=100.0)},
+    )
+    assert result.total_trades == 0

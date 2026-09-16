@@ -68,6 +68,7 @@ def build_parser():
     replay.add_argument("--ticks", required=True, help="tick CSV with time,price columns")
     replay.add_argument("--intents", required=True, help="JSON array of approved BUY intents")
     replay.add_argument("--ledger", default="reports/paper-ledger.jsonl")
+    replay.add_argument("--timezone", default="UTC", help="IANA session timezone")
     replay.add_argument("--starting-equity", type=float, default=100_000.0)
     replay.add_argument("--risk-fraction", type=float, default=0.01)
     replay.add_argument("--max-risk-fraction", type=float, default=0.01)
@@ -173,7 +174,8 @@ def run_paper_replay(args):
     intents = json.loads(Path(args.intents).read_text(encoding="utf-8"))
     if not isinstance(intents, list):
         raise ValueError("intents JSON must be an array")
-    ledger = __import__("wickhunter.ledger", fromlist=["TradeLedger"]).TradeLedger(args.ledger)
+    from .ledger import TradeLedger
+    ledger = TradeLedger(args.ledger)
     limits = RiskLimits(
         max_risk_fraction=args.max_risk_fraction,
         max_trades_per_day=args.max_trades_per_day,
@@ -189,6 +191,7 @@ def run_paper_replay(args):
         risk_fraction=args.risk_fraction,
         risk_limits=limits,
         ledger=ledger,
+        timezone_name=args.timezone,
     )
     print(json.dumps({"starting_equity": args.starting_equity, "equity": state.equity,
                       "net_pnl": state.equity - args.starting_equity,

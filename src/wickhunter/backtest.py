@@ -23,6 +23,18 @@ class BacktestConfig:
     max_trades_per_day: int = 1
     slippage: float = 0.0
 
+    def __post_init__(self) -> None:
+        if self.starting_equity <= 0:
+            raise ValueError("starting_equity must be positive")
+        if not 0 < self.risk_fraction <= 1:
+            raise ValueError("risk_fraction must be in (0, 1]")
+        if self.minimum_reward_risk <= 0:
+            raise ValueError("minimum_reward_risk must be positive")
+        if self.stop_buffer < 0 or self.slippage < 0:
+            raise ValueError("stop_buffer and slippage cannot be negative")
+        if self.max_trades_per_day < 1:
+            raise ValueError("max_trades_per_day must be >= 1")
+
 
 @dataclass(frozen=True)
 class BacktestTrade:
@@ -64,10 +76,11 @@ class BacktestResult:
 
 
 class WickHunterBacktester:
-    """Run one independent WickHunter engine per trading session.
+    """Run one independent long-only engine per trading session.
 
-    The caller supplies completed M1 candles grouped by session and the
-    previous completed session's PDH/PDL. No future session level is read.
+    In OHLC mode, exits begin on the candle after entry because bar data
+    cannot prove whether a stop/target was reached before or after an
+    intrabar SignalHigh entry trigger.
     """
 
     def __init__(self, config: Optional[BacktestConfig] = None):
@@ -75,7 +88,7 @@ class WickHunterBacktester:
 
     @staticmethod
     def _resolve_exit(candle: Candle, stop: float, target: float):
-        """Resolve an exit from OHLC using a deterministic conservative model."""
+        """Resolve an exit from OHLC using deterministic stop-first ordering."""
         if candle.low <= stop:
             return stop, "LOSS"
         if candle.high >= target:
@@ -86,12 +99,11 @@ class WickHunterBacktester:
         equity = self.config.starting_equity
         result = BacktestResult(equity, equity)
 
-        for session, candles_iter in sessions.items():
+        for session in sorted(sessions):
+            candles = list(sessions[session])
             if session not in levels:
                 result.rejected.append({"session": session, "reason": "MISSING_PREVIOUS_DAY_LEVELS"})
                 continue
-
-            candles = list(candles_iter)
             if not candles:
                 continue
 
@@ -108,73 +120,62 @@ class WickHunterBacktester:
             pending = None
 
             for candle in candles:
-                if pending is None:
-                    event = engine.on_candle(candle)
-                    if event and event["action"] == "BUY":
-                        entry = event["entry"] + self.config.slippage
-                        stop = event["stop"]
-                        target = event["target"]
-                        risk_per_unit = entry - stop
-                        if risk_per_unit <= 0:
-                            result.rejected.append({"session": session, "time": str(candle.time), "reason": "INVALID_STOP"})
-                            continue
-                        quantity = equity * self.config.risk_fraction / risk_per_unit
-                        pending = {
-                            "entry_time": candle.time,
-                            "entry": entry,
-                            "stop": stop,
-                            "target": target,
-                            "quantity": quantity,
-                        }
-                        # Entry is triggered intrabar. Therefore this same
-                        # confirmation candle may also reach SL/TP afterward.
-                        exit_price, exit_result = self._resolve_exit(candle, stop, target)
-                        if exit_result:
-                            self._record_trade(result, session, pending, candle, exit_price, exit_result, equity)
-                            equity += (exit_price - entry) * quantity
-                            pending = None
+                if pending is not None:
+                    exit_price, exit_result = self._resolve_exit(candle, pending["stop"], pending["target"])
+                    if exit_result:
+                        pnl = (exit_price - pending["entry"]) * pending["quantity"]
+                        risk_cash = (pending["entry"] - pending["stop"]) * pending["quantity"]
+                        equity += pnl
+                        result.trades.append(BacktestTrade(
+                            session=session,
+                            entry_time=pending["entry_time"],
+                            entry=pending["entry"],
+                            stop=pending["stop"],
+                            target=pending["target"],
+                            quantity=pending["quantity"],
+                            exit_time=candle.time,
+                            exit_price=exit_price,
+                            result=exit_result,
+                            pnl=pnl,
+                            r_multiple=pnl / risk_cash if risk_cash else 0.0,
+                        ))
+                        pending = None
                     continue
 
-                exit_price, exit_result = self._resolve_exit(candle, pending["stop"], pending["target"])
-                if exit_result:
-                    pnl = (exit_price - pending["entry"]) * pending["quantity"]
-                    risk_cash = (pending["entry"] - pending["stop"]) * pending["quantity"]
-                    equity += pnl
-                    result.trades.append(BacktestTrade(
-                        session=session,
-                        entry_time=pending["entry_time"],
-                        entry=pending["entry"],
-                        stop=pending["stop"],
-                        target=pending["target"],
-                        quantity=pending["quantity"],
-                        exit_time=candle.time,
-                        exit_price=exit_price,
-                        result=exit_result,
-                        pnl=pnl,
-                        r_multiple=pnl / risk_cash if risk_cash else 0.0,
-                    ))
-                    pending = None
+                event = engine.on_candle(candle)
+                if not event or event.get("action") != "BUY":
+                    continue
+
+                entry = event["entry"] + self.config.slippage
+                if candle.high < entry:
+                    result.rejected.append({
+                        "session": session,
+                        "time": str(candle.time),
+                        "reason": "ENTRY_NOT_FILLED_SLIPPAGE",
+                    })
+                    continue
+
+                stop = event["stop"]
+                target = event["target"]
+                risk_per_unit = entry - stop
+                if risk_per_unit <= 0:
+                    result.rejected.append({"session": session, "time": str(candle.time), "reason": "INVALID_STOP"})
+                    continue
+
+                quantity = equity * self.config.risk_fraction / risk_per_unit
+                pending = {
+                    "entry_time": candle.time,
+                    "entry": entry,
+                    "stop": stop,
+                    "target": target,
+                    "quantity": quantity,
+                }
+                # Do not inspect the confirmation candle for exits: OHLC
+                # cannot establish whether its low/high occurred before or
+                # after the intrabar SignalHigh entry trigger.
 
             if pending is not None:
                 result.rejected.append({"session": session, "reason": "OPEN_AT_SESSION_END"})
 
         result.ending_equity = equity
         return result
-
-    @staticmethod
-    def _record_trade(result, session, pending, candle, exit_price, exit_result, equity_before):
-        pnl = (exit_price - pending["entry"]) * pending["quantity"]
-        risk_cash = (pending["entry"] - pending["stop"]) * pending["quantity"]
-        result.trades.append(BacktestTrade(
-            session=session,
-            entry_time=pending["entry_time"],
-            entry=pending["entry"],
-            stop=pending["stop"],
-            target=pending["target"],
-            quantity=pending["quantity"],
-            exit_time=candle.time,
-            exit_price=exit_price,
-            result=exit_result,
-            pnl=pnl,
-            r_multiple=pnl / risk_cash if risk_cash else 0.0,
-        ))

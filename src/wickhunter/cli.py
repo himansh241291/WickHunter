@@ -57,11 +57,13 @@ def build_parser():
 
 def _write_csv(path, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
+    rows = list(rows)
     if not rows:
         path.write_text("", encoding="utf-8")
         return
+    fieldnames = list(dict.fromkeys(key for row in rows for key in row.keys()))
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -73,11 +75,13 @@ def _floats(value):
 def run_backtest(args):
     candles = load_m1_csv(args.data)
     sessions, levels = prepare_sessions(candles, timezone_name=args.timezone)
-    config = BacktestConfig(starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
+    config = BacktestConfig(
+        starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
         minimum_reward_risk=args.minimum_rr, stop_buffer=args.stop_buffer,
         max_trades_per_day=args.max_trades_per_day, entry_slippage=args.entry_slippage,
         exit_slippage=args.exit_slippage, commission_per_unit=args.commission_per_unit,
-        liquidate_at_session_end=not args.no_session_liquidation)
+        liquidate_at_session_end=not args.no_session_liquidation,
+    )
     result = WickHunterBacktester(config).run(sessions, levels)
     metrics = summarize(result)
     output = Path(args.output_dir)
@@ -101,10 +105,12 @@ def run_validate(args):
 def run_research(args):
     candles = load_m1_csv(args.data)
     sessions, levels = prepare_sessions(candles, timezone_name=args.timezone)
-    cases = sensitivity_cases(starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
+    cases = sensitivity_cases(
+        starting_equity=args.starting_equity, risk_fraction=args.risk_fraction,
         minimum_rr_values=_floats(args.rr_values), stop_buffers=_floats(args.stop_buffers),
         slippages=_floats(args.entry_slippages), exit_slippages=_floats(args.exit_slippages),
-        commissions_per_unit=_floats(args.commissions))
+        commissions_per_unit=_floats(args.commissions),
+    )
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     if args.train_size and args.test_size:

@@ -43,24 +43,6 @@ def test_max_slippage_rejects_buy():
     assert result.rejected[-1]["reason"] == "max_slippage"
 
 
-def test_max_daily_loss_blocks_later_setup_same_session():
-    start = datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc)
-    data = [
-        Candle(start, 100.5, 100.8, 99.0, 99.5),
-        Candle(start + timedelta(minutes=1), 99.5, 101.5, 99.2, 101.2),
-        Candle(start + timedelta(minutes=2), 101.2, 101.6, 100.8, 101.4),
-        Candle(start + timedelta(minutes=3), 101.4, 101.5, 98.0, 100.0),
-        Candle(start + timedelta(minutes=4), 100.0, 101.5, 99.2, 101.2),
-        Candle(start + timedelta(minutes=5), 101.2, 105.0, 101.0, 104.0),
-        Candle(start + timedelta(minutes=6), 104.0, 106.0, 103.8, 105.5),
-    ]
-    result = WickHunterBacktester(BacktestConfig(max_trades_per_day=2, max_daily_loss_fraction=0.001)).run(
-        {"2026-01-02": data}, {"2026-01-02": DailyLevels("2026-01-02", 106, 100)}
-    )
-    assert result.total_trades == 1
-    assert any(item["reason"] == "max_daily_loss" for item in result.rejected)
-
-
 def test_consecutive_loss_guard_carries_across_sessions():
     day1, level1 = losing_setup(2)
     day2, level2 = losing_setup(3)

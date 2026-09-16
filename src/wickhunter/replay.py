@@ -35,9 +35,12 @@ def replay_buy_intents(
 ) -> RiskState:
     """Replay pre-approved BUY intents against ordered ticks.
 
-    An intent becomes eligible at its timestamp but is not filled until a
-    later/equal ordered tick reaches its BUY trigger. The observed tick price
-    is used as the fill trigger, so gap-through-trigger execution is modeled.
+    An intent becomes eligible after its confirmation-candle timestamp and is
+    not filled until a strictly later ordered tick reaches its BUY trigger.
+    This prevents ticks belonging to the already-completed confirmation
+    candle from leaking into execution. The observed tick price is used as
+    the fill trigger, so gap-through-trigger execution is modeled.
+
     Sessions are separated by the tick's local offset date: an open position
     is liquidated at the last tick of the prior date and daily risk counters
     reset before the next date begins. Pending intents do not cross sessions.
@@ -64,7 +67,7 @@ def replay_buy_intents(
             pending.clear()
             session_date = tick.time.date()
 
-        while index < len(intent_by_time) and datetime.fromisoformat(intent_by_time[index]["time"]) <= tick.time:
+        while index < len(intent_by_time) and datetime.fromisoformat(intent_by_time[index]["time"]) < tick.time:
             pending.append(intent_by_time[index])
             index += 1
 

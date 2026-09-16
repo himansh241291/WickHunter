@@ -15,11 +15,17 @@ def test_valid_contiguous_m1_dataset():
     assert report.gaps == 0
 
 
-def test_gap_is_reported():
+def test_gap_is_reported_but_not_invalid_by_default():
     report = validate_m1([candle(0), candle(3)])
-    assert not report.valid
+    assert report.valid
     assert report.gaps == 1
     assert report.max_gap_minutes == 3
+
+
+def test_strict_continuity_rejects_gap():
+    report = validate_m1([candle(0), candle(3)], strict_continuity=True)
+    assert not report.valid
+    assert report.gaps == 1
 
 
 def test_duplicate_timestamp_is_reported():

@@ -55,9 +55,9 @@ class PaperBroker:
             return self._reject(time, "unreconciled_open_position")
         if self.kill_switch is not None and not self.kill_switch.allow_buy():
             return self._reject(time, "kill_switch_engaged")
-        if target <= trigger:
-            return self._reject(time, "invalid_long_target")
         entry = self.execution.entry_price(trigger)
+        if target <= entry:
+            return self._reject(time, "invalid_long_target")
         decision = self.risk_guard.check_buy(self.risk_state, entry=entry, stop=stop,
             requested_risk_fraction=requested_risk_fraction, spread=spread,
             expected_slippage=self.execution.config.entry_slippage)

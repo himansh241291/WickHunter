@@ -1,7 +1,5 @@
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from wickhunter.backtest import BacktestConfig, DailyLevels, WickHunterBacktester
 from wickhunter.models import Candle
 
@@ -52,7 +50,7 @@ def test_two_consecutive_closes_below_pdl_invalidate_sweep():
 
 def test_entry_slippage_can_prevent_confirmation_fill():
     data = bars((100.5, 100.8, 99.0, 99.5), (99.5, 101.5, 99.2, 101.2), (101.2, 101.5, 101.0, 101.3))
-    result = WickHunterBacktester(BacktestConfig(entry_slippage=0.1)).run({"2026-01-02": data}, levels(pdh=105.0))
+    result = WickHunterBacktester(BacktestConfig(entry_slippage=0.1)).run({"2026-01-02": data}, levels(pdh=106.0))
     assert result.total_trades == 0
     assert result.rejected[-1]["reason"] == "ENTRY_NOT_FILLED_SLIPPAGE"
 

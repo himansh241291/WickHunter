@@ -20,7 +20,10 @@ def load_ticks(path: str | Path) -> list[Tick]:
         if not reader.fieldnames or not {"time", "price"}.issubset(reader.fieldnames):
             raise ValueError("Tick CSV requires time,price columns")
         for row in reader:
-            ticks.append(Tick(datetime.fromisoformat(row["time"]), float(row["price"])))
+            timestamp = datetime.fromisoformat(row["time"])
+            if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                raise ValueError("tick timestamps must be timezone-aware")
+            ticks.append(Tick(timestamp, float(row["price"])))
     ticks.sort(key=lambda item: item.time)
     return ticks
 

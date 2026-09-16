@@ -62,7 +62,7 @@ CSV / future market-data adapter
  Research / Walk-forward reports
 ```
 
-The strategy core has no broker SDK dependency. The current OHLC backtester deliberately starts exit evaluation on the candle after the intrabar SignalHigh entry trigger because OHLC bars cannot prove whether a stop or target was touched before or after entry. The baseline also liquidates an open position at the session's final close rather than carrying it into another session. A future tick-level execution model can replace these assumptions without changing the signal rules.
+The strategy core has no broker SDK dependency. The current OHLC backtester deliberately starts exit evaluation on the candle after the intrabar SignalHigh entry trigger because OHLC bars cannot prove whether a stop or target was touched before or after entry. The baseline also liquidates an open position at the session's final close rather than carrying it into another session. Ordered tick execution removes this intrabar ordering ambiguity where tick data is available.
 
 Execution costs are explicit: entry slippage, exit slippage, and per-unit commission. Exit ambiguity is deterministic stop-first for the baseline OHLC model.
 
@@ -103,15 +103,30 @@ wickhunter research --data data/M1.csv --timezone Asia/Kolkata \
   --rr-values 1.5,2.0,2.5 --output-dir reports/walkforward
 ```
 
+Run ordered-tick paper replay from approved BUY intents:
+
+```bash
+wickhunter paper-replay \
+  --ticks data/ticks.csv \
+  --intents data/buy-intents.json \
+  --ledger reports/paper-ledger.jsonl
+```
+
+The tick CSV requires `time,price`. Intent JSON is an array containing `time`, `trigger`, `stop`, and `target`, with optional `risk_fraction` and `spread`. The replay harness does not generate signals; it executes only already-approved BUY intents.
+
 Backtest execution-cost controls:
 
 ```text
---entry-slippage / --slippage   # backward-compatible alias
+--entry-slippage / --slippage
 --exit-slippage
 --commission-per-unit
 ```
 
 The CLI writes JSON and CSV reports containing metrics, trades, rejections, audit events, and walk-forward train/test results where requested.
+
+## Durable paper-trading safety
+
+Paper execution supports an append-only JSONL ledger with flush+fsync durability, restart inspection, and a persistent kill switch. Before resuming after a process restart, recover the ledger snapshot and reconcile any open position before accepting a new BUY. An engaged kill switch blocks new BUY entries.
 
 ## Data format
 
@@ -144,4 +159,4 @@ GitHub Actions runs the test suite on pushes to `main` and pull requests.
 
 ## Status
 
-Deterministic v0.1 rulebook + portable strategy engine + session-aware CSV pipeline + execution-cost model + audit ledger + CLI + sensitivity research + rolling walk-forward framework are implemented. Next build stage is stronger market-data quality controls, tick-level execution modeling where data permits, and paper-trading infrastructure. No live-trading defaults should be inferred from the current code.
+Deterministic v0.1 rulebook + portable strategy engine + session-aware CSV pipeline + execution-cost model + audit ledger + CLI + sensitivity research + rolling walk-forward + ordered-tick execution + paper broker + durable paper ledger/recovery + kill switch + paper replay CLI are implemented. No live-trading defaults should be inferred from the current code.

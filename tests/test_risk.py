@@ -33,3 +33,11 @@ def test_buy_risk_enforces_spread_slippage_and_loss_limits():
     state.consecutive_losses = 0
     assert guard.check_buy(state, entry=101, stop=99, requested_risk_fraction=0.01, spread=0.3).reason == "max_spread"
     assert guard.check_buy(state, entry=101, stop=99, requested_risk_fraction=0.01, expected_slippage=0.2).reason == "max_slippage"
+
+
+def test_daily_loss_limit_uses_day_start_equity():
+    state = RiskState(starting_equity=100_000, equity=120_000)
+    state.reset_day()
+    state.record_close(-2_000)
+    guard = BuyRiskGuard(RiskLimits(max_daily_loss_fraction=0.02))
+    assert guard.check_buy(state, entry=101, stop=99, requested_risk_fraction=0.01).reason == "max_daily_loss"

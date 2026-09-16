@@ -7,7 +7,6 @@ def summarize(result: BacktestResult) -> dict:
     pnls = [trade.pnl for trade in result.trades]
     gross_profit = sum(p for p in pnls if p > 0)
     gross_loss = -sum(p for p in pnls if p < 0)
-
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p < 0]
 
@@ -26,15 +25,14 @@ def summarize(result: BacktestResult) -> dict:
         else:
             consecutive_losses = 0
 
-    durations = [
-        (trade.exit_time - trade.entry_time).total_seconds() / 60
-        for trade in result.trades
-        if hasattr(trade.exit_time, "__sub__")
-    ]
-    average_hold_minutes = sum(durations) / len(durations) if durations else 0.0
+    durations = []
+    for trade in result.trades:
+        entry_time = getattr(trade, "entry_time", None)
+        exit_time = getattr(trade, "exit_time", None)
+        if entry_time is not None and exit_time is not None:
+            durations.append((exit_time - entry_time).total_seconds() / 60)
 
-    # None is JSON-safe and explicitly means the profit factor is undefined
-    # when there is no realized loss; Infinity is intentionally avoided.
+    r_values = [getattr(trade, "r_multiple", 0.0) for trade in result.trades]
     profit_factor = gross_profit / gross_loss if gross_loss else None
 
     return {
@@ -44,7 +42,7 @@ def summarize(result: BacktestResult) -> dict:
         "total_trades": result.total_trades,
         "wins": result.wins,
         "losses": result.losses,
-        "session_closes": result.session_closes,
+        "session_closes": getattr(result, "session_closes", 0),
         "win_rate": result.win_rate,
         "profit_factor": profit_factor,
         "expectancy_per_trade": sum(pnls) / len(pnls) if pnls else 0.0,
@@ -52,12 +50,9 @@ def summarize(result: BacktestResult) -> dict:
         "average_loss": sum(losses) / len(losses) if losses else 0.0,
         "max_drawdown": max_drawdown,
         "max_consecutive_losses": max_consecutive_losses,
-        "average_hold_minutes": average_hold_minutes,
-        "total_r": sum(trade.r_multiple for trade in result.trades),
-        "average_r": (
-            sum(trade.r_multiple for trade in result.trades) / len(result.trades)
-            if result.trades else 0.0
-        ),
-        "rejections": len(result.rejected),
-        "audit_events": len(result.audit),
+        "average_hold_minutes": sum(durations) / len(durations) if durations else 0.0,
+        "total_r": sum(r_values),
+        "average_r": sum(r_values) / len(r_values) if r_values else 0.0,
+        "rejections": len(getattr(result, "rejected", [])),
+        "audit_events": len(getattr(result, "audit", [])),
     }

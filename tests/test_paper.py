@@ -59,3 +59,18 @@ def test_paper_ledger_and_kill_switch_survive_restart(tmp_path):
     assert restarted_state["open_position"] is None
     restarted_broker = PaperBroker(RiskState(starting_equity=100_000, equity=100_000), kill_switch=restarted_switch)
     assert restarted_broker.submit_buy(time=_time(3), trigger=101, stop=99, target=105, requested_risk_fraction=0.01) is None
+
+
+def test_paper_blocks_new_buy_when_persisted_position_is_unreconciled(tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    ledger = TradeLedger(path)
+    state = RiskState(starting_equity=100_000, equity=100_000)
+    broker = PaperBroker(state, ledger=ledger)
+    assert broker.submit_buy(time=_time(), trigger=101, stop=99, target=105, requested_risk_fraction=0.01)
+
+    restarted = PaperBroker(
+        RiskState(starting_equity=100_000, equity=100_000),
+        ledger=TradeLedger(path),
+    )
+    assert restarted.submit_buy(time=_time(1), trigger=102, stop=100, target=106, requested_risk_fraction=0.01) is None
+    assert restarted.audit[-1]["reason"] == "unreconciled_open_position"

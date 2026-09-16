@@ -25,6 +25,7 @@ def test_generate_buy_intents_uses_confirmation_candle():
     assert intent.target == 105
     assert intent.signal_time == datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc)
     assert intent.confirmation_time == datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc)
+    assert intent.expires_at == datetime(2026, 1, 2, 9, 3, tzinfo=timezone.utc)
 
 
 def test_intents_are_json_serializable():

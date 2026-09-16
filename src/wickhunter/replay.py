@@ -37,8 +37,10 @@ def replay_buy_intents(
 
     An intent becomes eligible at its timestamp but is not filled until a
     later/equal ordered tick reaches its BUY trigger. The observed tick price
-    is used as the fill trigger, so gap-through-trigger execution is modeled
-    instead of silently filling at an unobserved trigger price.
+    is used as the fill trigger, so gap-through-trigger execution is modeled.
+    Sessions are separated by the tick's local offset date: an open position
+    is liquidated at the last tick of the prior date and daily risk counters
+    reset before the next date begins. Pending intents do not cross sessions.
 
     This function deliberately accepts BUY intents only; strategy generation
     remains in the WickHunter engine and is not duplicated here.
@@ -49,7 +51,19 @@ def replay_buy_intents(
     intent_by_time = sorted(intents, key=lambda item: datetime.fromisoformat(item["time"]))
     pending: list[dict] = []
     index = 0
+    previous_tick: Tick | None = None
+    session_date = None
+
     for tick in ticks:
+        if session_date is None:
+            session_date = tick.time.date()
+        elif tick.time.date() != session_date:
+            if broker.position is not None and previous_tick is not None:
+                broker.close_session(time=previous_tick.time, price=previous_tick.price)
+            state.reset_day()
+            pending.clear()
+            session_date = tick.time.date()
+
         while index < len(intent_by_time) and datetime.fromisoformat(intent_by_time[index]["time"]) <= tick.time:
             pending.append(intent_by_time[index])
             index += 1
@@ -71,4 +85,5 @@ def replay_buy_intents(
                     break
 
         broker.process_tick(tick)
+        previous_tick = tick
     return state

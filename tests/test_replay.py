@@ -32,3 +32,31 @@ def test_replay_buy_intent_closes_on_target(tmp_path):
     assert state.equity > state.starting_equity
     assert state.trades_today == 1
     assert ledger.snapshot()["open_position"] is None
+
+
+def test_replay_waits_for_trigger_and_uses_observed_gap_price():
+    ticks = [
+        Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 100.5),
+        Tick(datetime(2026, 1, 2, 9, 2, tzinfo=timezone.utc), 101.25),
+        Tick(datetime(2026, 1, 2, 9, 3, tzinfo=timezone.utc), 105),
+    ]
+    state = replay_buy_intents(
+        ticks,
+        [{"time": "2026-01-02T09:00:00+00:00", "trigger": 101, "stop": 99, "target": 105}],
+    )
+    assert state.trades_today == 1
+    assert state.equity > state.starting_equity
+
+
+def test_replay_does_not_fill_when_trigger_is_never_reached():
+    ticks = [
+        Tick(datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc), 100),
+        Tick(datetime(2026, 1, 2, 9, 1, tzinfo=timezone.utc), 100.5),
+    ]
+    state = replay_buy_intents(
+        ticks,
+        [{"time": "2026-01-02T09:00:00+00:00", "trigger": 101, "stop": 99, "target": 105}],
+    )
+    assert state.trades_today == 0
+    assert state.equity == state.starting_equity

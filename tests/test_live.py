@@ -4,7 +4,7 @@ from wickhunter.engine import State
 from wickhunter.ledger import TradeLedger
 from wickhunter.live import BuyCoordinator, buy_client_order_id
 from wickhunter.models import Candle
-from wickhunter.ports import BuyOrder, OrderReceipt
+from wickhunter.ports import BuyOrder, CloseReceipt, OrderReceipt
 from wickhunter.risk import RiskState
 
 
@@ -162,3 +162,46 @@ def test_restart_accepts_broker_accepted_pending_buy_without_resubmission(tmp_pa
     assert restarted.receipt is not None
     assert broker.orders == []
     assert ledger.snapshot()["pending_buy"] is None
+
+
+def test_position_monitor_closes_existing_long_at_stop(tmp_path):
+    from wickhunter.position import LongPositionMonitor
+
+    class PositionExecution(FakeExecution):
+        def close_long(self, *, time, price):
+            return CloseReceipt("close-1", time, price, 100)
+
+    ledger = TradeLedger(tmp_path / "ledger.jsonl")
+    now = datetime(2026, 1, 2, 9, tzinfo=timezone.utc)
+    ledger.append(
+        "BUY_FILLED", time=now, order_id="buy-1", client_order_id="c",
+        entry=101, stop=99, target=106, quantity=100
+    )
+    monitor = LongPositionMonitor(execution=PositionExecution(), ledger=ledger)
+    assert monitor.reconcile().safe_to_buy is True
+    receipt = monitor.on_price(time=now, price=98.5, stop=99, target=106)
+    assert receipt is not None
+    assert receipt.fill_price == 99
+    assert ledger.snapshot()["open_position"] is None
+
+
+def test_position_monitor_closes_at_session_end(tmp_path):
+    from wickhunter.position import LongPositionMonitor
+
+    class PositionExecution(FakeExecution):
+        def close_long(self, *, time, price):
+            return CloseReceipt("close-2", time, price, 100)
+
+    ledger = TradeLedger(tmp_path / "ledger.jsonl")
+    now = datetime(2026, 1, 2, 15, 29, tzinfo=timezone.utc)
+    ledger.append(
+        "BUY_FILLED", time=now, order_id="buy-1", client_order_id="c",
+        entry=101, stop=99, target=106, quantity=100
+    )
+    monitor = LongPositionMonitor(execution=PositionExecution(), ledger=ledger)
+    receipt = monitor.on_price(
+        time=now, price=104, stop=99, target=106, session_end=True
+    )
+    assert receipt is not None
+    assert receipt.fill_price == 104
+    assert ledger.snapshot()["open_position"] is None

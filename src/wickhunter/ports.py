@@ -33,6 +33,7 @@ class CloseReceipt:
     time: datetime
     fill_price: float
     quantity: float
+    client_order_id: str = ""
 
 
 class MarketDataPort(Protocol):
@@ -52,8 +53,12 @@ class BuyExecutionPort(Protocol):
         """Return an accepted/fill receipt for an existing client ID."""
         ...
 
-    def close_long(self, *, time: datetime, price: float) -> CloseReceipt:
+    def close_long(self, *, time: datetime, price: float, client_order_id: str = "") -> CloseReceipt:
         """Close an already-open long position for lifecycle management."""
+        ...
+
+    def find_close_order(self, client_order_id: str) -> CloseReceipt | None:
+        """Return a previously accepted long-close receipt for an idempotency key."""
         ...
 
     def position(self) -> dict | None:

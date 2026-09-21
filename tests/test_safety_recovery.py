@@ -33,3 +33,15 @@ def test_recover_risk_state_preserves_consecutive_losses(tmp_path):
     state = recover_risk_state(ledger, starting_equity=100_000, as_of=base.replace(minute=5))
     assert state.equity == 99_965
     assert state.consecutive_losses == 3
+
+
+def test_recover_risk_state_uses_requested_timezone(tmp_path):
+    from datetime import timedelta
+    ledger = TradeLedger(tmp_path / "ledger.jsonl")
+    india = timezone(timedelta(hours=5, minutes=30))
+    utc = timezone.utc
+    late = datetime(2026, 1, 2, 23, 45, tzinfo=utc)
+    ledger.append("BUY_FILLED", time=late, entry=101, stop=99, target=105, quantity=10)
+    state = recover_risk_state(ledger, starting_equity=100_000, as_of=datetime(2026, 1, 3, 1, 0, tzinfo=utc), timezone_name="Asia/Kolkata")
+    assert state.trades_today == 1
+    assert state.day_starting_equity == 100_000

@@ -14,9 +14,9 @@ from .ports import BuyOrder, CloseReceipt, OrderReceipt
 
 
 def _reference_id(client_order_id: str) -> str:
-    """Groww order_reference_id is limited to 20 alphanumeric/hyphen chars."""
-    raw = client_order_id.replace("-", "").upper()
-    return raw[:20]
+    """Map the full WickHunter ID to Groww's 20-character reference limit."""
+    import hashlib
+    return "WH" + hashlib.sha256(client_order_id.encode()).hexdigest()[:18].upper()
 
 
 class GrowwExecution:

@@ -247,6 +247,7 @@ def test_position_monitor_persists_close_intent_before_broker_call(tmp_path):
     assert ledger.snapshot()["pending_close"] is None
 
 
+
 def test_position_monitor_recovers_broker_accepted_close_without_duplicate(tmp_path):
     from wickhunter.position import LongPositionMonitor
 
@@ -254,17 +255,15 @@ def test_position_monitor_recovers_broker_accepted_close_without_duplicate(tmp_p
     now = datetime(2026, 1, 2, 9, tzinfo=timezone.utc)
     ledger.append("BUY_FILLED", time=now, order_id="buy-1", client_order_id="c",
                   entry=101, stop=99, target=106, quantity=100)
-    ledger.append("LONG_CLOSE_INTENT", time=now, client_order_id="wh-close-expected",
-                  result="WIN", trigger=106)
 
-    class AcceptedClose(FakeExecution):
+    class CrashAfterAccept(FakeExecution):
         def __init__(self):
             super().__init__({"entry": 101, "stop": 99, "target": 106, "quantity": 100})
-        def find_close_order(self, client_order_id):
-            return CloseReceipt("close-accepted", now, 106, 100, client_order_id)
+        def close_long(self, *, time, price, client_order_id=""):
+            return CloseReceipt("close-accepted", time, price, 100, client_order_id)
 
-    monitor = LongPositionMonitor(execution=AcceptedClose(), ledger=ledger)
-    assert monitor.reconcile().safe_to_buy
-    monitor.position_snapshot["order_id"] = "buy-1"
-    assert monitor.on_price(time=now, price=106, stop=99, target=106) is not None
-    assert ledger.snapshot()["pending_close"] is None
+    first = LongPositionMonitor(execution=CrashAfterAccept(), ledger=ledger)
+    assert first.reconcile().safe_to_buy
+    assert first.on_price(time=now, price=106, stop=99, target=106) is not None
+    pending = ledger.snapshot()["pending_close"]
+    assert pending is None

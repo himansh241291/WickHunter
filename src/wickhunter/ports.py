@@ -1,8 +1,8 @@
-"""Broker-neutral ports for future live BUY execution.
+"""Broker-neutral BUY execution ports.
 
-The strategy does not know which broker, exchange, or transport is used.
-Only explicit BUY submission and long-position lifecycle operations are
-represented here; there is intentionally no SELL/short order port.
+The strategy never knows broker credentials or transport details. Order
+submission is idempotent through a stable client_order_id. There is no
+SELL/short entry port.
 """
 from __future__ import annotations
 
@@ -15,13 +15,14 @@ from .tick import Tick
 
 @dataclass(frozen=True)
 class BuyOrder:
-    """A fully specified BUY order request."""
+    """A fully specified BUY order request with a stable idempotency key."""
 
     time: datetime
     quantity: float
     trigger: float
     stop: float
     target: float
+    client_order_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -32,11 +33,10 @@ class OrderReceipt:
     time: datetime
     fill_price: float
     quantity: float
+    client_order_id: str = ""
 
 
 class MarketDataPort(Protocol):
-    """Minimal market-data contract required by a live adapter."""
-
     def ticks(self):
         """Yield timezone-aware ordered Tick objects."""
         ...
@@ -46,6 +46,7 @@ class BuyExecutionPort(Protocol):
     """Minimal execution contract for a BUY-only adapter."""
 
     def submit_buy(self, order: BuyOrder) -> OrderReceipt:
+        """Submit idempotently by client_order_id."""
         ...
 
     def close_long(self, *, time: datetime, price: float) -> None:
@@ -53,11 +54,10 @@ class BuyExecutionPort(Protocol):
         ...
 
     def position(self) -> dict | None:
+        """Return the broker's actual open long position, if any."""
         ...
 
 
 class TickConsumer(Protocol):
-    """Optional interface for components consuming live ticks."""
-
     def on_tick(self, tick: Tick) -> None:
         ...

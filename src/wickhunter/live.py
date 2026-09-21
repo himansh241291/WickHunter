@@ -117,6 +117,8 @@ class BuyCoordinator:
         return self.armed
 
     def on_completed_candle(self, candle: Candle) -> ArmedBuy | None:
+        if self.halted:
+            return None
         if self.armed is not None or self.receipt is not None:
             return self.armed
         self.engine.on_candle(candle)

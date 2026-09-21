@@ -19,6 +19,9 @@ class FakeExecution:
             "paper-1", order.time, order.trigger, order.quantity, order.client_order_id
         )
 
+    def find_buy_order(self, client_order_id):
+        return None
+
     def close_long(self, *, time, price):
         raise AssertionError("live coordinator must not create a SELL entry")
 
@@ -139,3 +142,23 @@ def test_trigger_not_seen_before_expiry():
     assert coordinator.on_tick(start + timedelta(minutes=3), 101.5) is None
     assert broker.orders == []
     assert coordinator.engine.state == State.DONE
+
+def test_restart_accepts_broker_accepted_pending_buy_without_resubmission(tmp_path):
+    start, candles = setup()
+    ledger = TradeLedger(tmp_path / "ledger.jsonl")
+    first = make_coordinator(ledger=ledger)
+    first.on_completed_candle(candles[0])
+    armed = first.on_completed_candle(candles[1])
+
+    class AcceptedExecution(FakeExecution):
+        def find_buy_order(self, client_order_id):
+            return OrderReceipt(client_order_id, start + timedelta(minutes=2, seconds=2), 101.6, 900)
+
+    broker = AcceptedExecution()
+    restarted = make_coordinator(broker=broker, ledger=ledger)
+    restored = restarted.recover_pending_buy()
+
+    assert restored is None
+    assert restarted.receipt is not None
+    assert broker.orders == []
+    assert ledger.snapshot()["pending_buy"] is None

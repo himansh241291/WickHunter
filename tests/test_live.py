@@ -281,5 +281,5 @@ def test_position_monitor_recovers_broker_accepted_close_without_duplicate(tmp_p
 
     restarted = LongPositionMonitor(execution=AcceptedExecution(), ledger=ledger)
     assert restarted.reconcile().safe_to_buy
-    assert restarted.on_price(time=now, price=106, stop=99, target=106) is not None
+    assert restarted.recover_pending_close() is not None
     assert ledger.snapshot()["pending_close"] is None

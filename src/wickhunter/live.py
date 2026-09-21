@@ -53,6 +53,7 @@ class BuyCoordinator:
         self.armed: ArmedBuy | None = None
         self.receipt: OrderReceipt | None = None
         self.reconciliation: Reconciliation | None = None
+        self.halted = False
 
     def reconcile_startup(self) -> Reconciliation:
         """Fail closed unless ledger and broker agree on the open long."""
@@ -60,6 +61,7 @@ class BuyCoordinator:
         result = reconcile_long_position(snapshot["open_position"], self.execution.position())
         self.reconciliation = result
         if not result.safe_to_buy:
+            self.halted = True
             self.engine.state = State.DONE
         return result
 
@@ -75,6 +77,11 @@ class BuyCoordinator:
                     "expires_at", "signal_time", "risk_fraction"}
         if not required.issubset(pending):
             raise ValueError("incomplete persisted BUY intent")
+        broker_receipt = self.execution.find_buy_order(str(pending["client_order_id"]))
+        if broker_receipt is not None:
+            self._accept_receipt(broker_receipt, pending)
+            return None
+
         order_time = datetime.fromisoformat(pending["time"])
         expires_at = datetime.fromisoformat(pending["expires_at"])
         signal_time = datetime.fromisoformat(pending["signal_time"])
@@ -135,7 +142,7 @@ class BuyCoordinator:
         self, tick_time: datetime, price: float, *, spread: float = 0.0
     ) -> OrderReceipt | None:
         armed = self.armed
-        if armed is None or self.receipt is not None:
+        if armed is None or self.receipt is not None or self.halted:
             return self.receipt
         if self.reconciliation is not None and not self.reconciliation.safe_to_buy:
             return None
@@ -193,6 +200,15 @@ class BuyCoordinator:
         # BUY_INTENT is durable before this call. If the process dies after the
         # broker accepts the order, restart can resubmit the same client ID.
         receipt = self.execution.submit_buy(order)
+        self._accept_receipt(receipt, {"stop": order.stop, "target": order.target})
+        return receipt
+
+    def _accept_receipt(self, receipt: OrderReceipt, pending: dict[str, Any]) -> None:
+        """Commit one broker acknowledgement exactly once to local state."""
+        if self.receipt is not None:
+            if self.receipt.order_id != receipt.order_id:
+                raise RuntimeError("conflicting BUY receipt")
+            return
         self.receipt = receipt
         self.armed = None
         self.risk_state.trades_today += 1
@@ -203,10 +219,9 @@ class BuyCoordinator:
                 "BUY_FILLED",
                 time=receipt.time,
                 order_id=receipt.order_id,
-                client_order_id=receipt.client_order_id or order.client_order_id,
+                client_order_id=receipt.client_order_id,
                 entry=receipt.fill_price,
-                stop=order.stop,
-                target=order.target,
+                stop=float(pending["stop"]),
+                target=float(pending["target"]),
                 quantity=receipt.quantity,
             )
-        return receipt

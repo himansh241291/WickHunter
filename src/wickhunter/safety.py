@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from .ledger import TradeLedger
 from .risk import RiskState
@@ -36,11 +37,16 @@ def recover_risk_state(
     *,
     starting_equity: float,
     as_of: datetime | None = None,
+    timezone_name: str = "UTC",
 ) -> RiskState:
     """Reconstruct account/risk counters from the append-only ledger."""
     events = ledger.events()
+    tz = ZoneInfo(timezone_name)
     if as_of is None:
-        as_of = events[-1].time if events else datetime.now().astimezone()
+        as_of = events[-1].time if events else datetime.now(tz)
+    if as_of.tzinfo is None or as_of.utcoffset() is None:
+        raise ValueError("as_of must be timezone-aware")
+    as_of_local_date = as_of.astimezone(tz).date()
 
     equity = starting_equity
     day_starting_equity = starting_equity
@@ -53,7 +59,7 @@ def recover_risk_state(
         if item.time > as_of:
             raise ValueError("ledger contains future event relative to as_of")
         if item.event == "BUY_FILLED":
-            if item.time.date() == as_of.date():
+            if item.time.astimezone(tz).date() == as_of_local_date
                 if not current_day_started:
                     day_starting_equity = equity
                     current_day_started = True
@@ -66,7 +72,7 @@ def recover_risk_state(
                     current_day_started = True
                 daily_pnl += pnl
             equity += pnl
-            if item.time.date() != as_of.date():
+            if item.time.astimezone(tz).date() != as_of_local_date
                 day_starting_equity = equity
             if pnl < 0:
                 consecutive_losses += 1

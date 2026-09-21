@@ -55,8 +55,15 @@ CSV / future market-data adapter
        v
    Trade ledger + audit
        |
-       v
- Performance metrics
+       +------------------+
+       |                  |
+       v                  v
+ Performance metrics   Live Runtime
+       |                  |
+       v             Reconcile / Recovery
+ Research / Walk-forward   |
+                            v
+                     Broker Execution Port
        |
        v
  Research / Walk-forward reports
@@ -162,6 +169,14 @@ Backtest execution-cost controls:
 
 The CLI writes JSON and CSV reports containing metrics, trades, rejections, audit events, and walk-forward train/test results where requested.
 
+## Live runtime safety
+
+The broker-neutral live layer uses the same strategy/risk primitives and does not require a broker SDK. LiveRuntime performs durable startup recovery, kill-switch recovery, broker/ledger position reconciliation, pending BUY recovery by stable client ID, and pending long-close recovery. FeedHealth provides a stale-market-data guard that fails closed for **new BUYs**. Existing long protection remains based on the broker-submitted stop/target.
+
+The live execution contract contains BUY submission plus lifecycle closure of an existing long position. There is deliberately no SELL-entry method.
+
+See docs/live-runtime.md for the startup and recovery sequence.
+
 ## Durable paper-trading safety
 
 Paper execution supports an append-only JSONL ledger with flush+fsync durability, restart inspection, durable risk-state reconstruction, and a persistent kill switch. Before resuming after a process restart, recover the ledger snapshot and risk state and reconcile any open position before accepting a new BUY. An engaged kill switch blocks new BUY entries.
@@ -174,4 +189,4 @@ Historical performance is not treated as proof of future profitability. The rese
 
 ## Status
 
-The repository currently contains the deterministic strategy engine, session-aware M1 data pipeline, OHLC backtester, execution-cost model, audit ledger, dataset validation, fixed sensitivity research, rolling walk-forward evaluation, BUY-intent exporter, ordered-tick paper replay, risk guardrails, durable recovery state, persistent kill switch, and explicit replay resume path. There is no live-trading default and no SELL-entry implementation.
+The repository currently contains the deterministic strategy engine, session-aware M1 data pipeline, OHLC backtester, execution-cost model, audit ledger, dataset validation, fixed sensitivity research, rolling walk-forward evaluation, BUY-intent exporter, ordered-tick paper replay, risk guardrails, durable recovery state, persistent kill switch, crash-safe long-close recovery, live startup orchestration, and stale-feed protection. Live trading remains broker-adapter work and is not enabled by default. There is no SELL-entry implementation.

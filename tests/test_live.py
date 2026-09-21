@@ -256,14 +256,30 @@ def test_position_monitor_recovers_broker_accepted_close_without_duplicate(tmp_p
     ledger.append("BUY_FILLED", time=now, order_id="buy-1", client_order_id="c",
                   entry=101, stop=99, target=106, quantity=100)
 
-    class CrashAfterAccept(FakeExecution):
+    class CrashExecution(FakeExecution):
         def __init__(self):
             super().__init__({"entry": 101, "stop": 99, "target": 106, "quantity": 100})
         def close_long(self, *, time, price, client_order_id=""):
-            return CloseReceipt("close-accepted", time, price, 100, client_order_id)
+            raise RuntimeError("process crashed after broker accepted close")
 
-    first = LongPositionMonitor(execution=CrashAfterAccept(), ledger=ledger)
+    first = LongPositionMonitor(execution=CrashExecution(), ledger=ledger)
     assert first.reconcile().safe_to_buy
-    assert first.on_price(time=now, price=106, stop=99, target=106) is not None
+    try:
+        first.on_price(time=now, price=106, stop=99, target=106)
+    except RuntimeError:
+        pass
     pending = ledger.snapshot()["pending_close"]
-    assert pending is None
+    assert pending is not None
+
+    class AcceptedExecution(FakeExecution):
+        def __init__(self):
+            super().__init__({"entry": 101, "stop": 99, "target": 106, "quantity": 100})
+        def find_close_order(self, client_order_id):
+            return CloseReceipt("close-accepted", now, 106, 100, client_order_id)
+        def close_long(self, *, time, price, client_order_id=""):
+            raise AssertionError("must not submit duplicate close")
+
+    restarted = LongPositionMonitor(execution=AcceptedExecution(), ledger=ledger)
+    assert restarted.reconcile().safe_to_buy
+    assert restarted.on_price(time=now, price=106, stop=99, target=106) is not None
+    assert ledger.snapshot()["pending_close"] is None

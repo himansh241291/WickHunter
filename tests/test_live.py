@@ -302,3 +302,4 @@ def test_live_coordinator_halts_and_persists_stale_feed(tmp_path):
     assert ledger.snapshot()["halted"]
     feed.observe(start + timedelta(seconds=7))
     assert not coordinator.on_heartbeat(start + timedelta(seconds=7))
+    assert coordinator.on_completed_candle(Candle(start + timedelta(minutes=2), 101, 102, 100.5, 101.5)) is None

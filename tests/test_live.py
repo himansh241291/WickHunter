@@ -283,3 +283,22 @@ def test_position_monitor_recovers_broker_accepted_close_without_duplicate(tmp_p
     assert restarted.reconcile().safe_to_buy
     assert restarted.recover_pending_close() is not None
     assert ledger.snapshot()["pending_close"] is None
+
+def test_live_coordinator_halts_and_persists_stale_feed(tmp_path):
+    from datetime import timedelta
+    from wickhunter.heartbeat import FeedHealth
+
+    start, _ = setup()
+    ledger = TradeLedger(tmp_path / "ledger.jsonl")
+    feed = FeedHealth(timedelta(seconds=5))
+    feed.observe(start)
+    coordinator = BuyCoordinator(
+        pdl=100, pdh=106, execution=FakeExecution(),
+        risk_state=RiskState(100000, 100000), ledger=ledger,
+        kill_switch=KillSwitch(ledger), feed_health=feed,
+    )
+    assert not coordinator.on_heartbeat(start + timedelta(seconds=6))
+    assert coordinator.halted
+    assert ledger.snapshot()["halted"]
+    feed.observe(start + timedelta(seconds=7))
+    assert not coordinator.on_heartbeat(start + timedelta(seconds=7))

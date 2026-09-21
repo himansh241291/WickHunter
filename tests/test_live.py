@@ -23,8 +23,11 @@ class FakeExecution:
     def find_buy_order(self, client_order_id):
         return None
 
-    def close_long(self, *, time, price):
+    def close_long(self, *, time, price, client_order_id=""):
         raise AssertionError("live coordinator must not create a SELL entry")
+
+    def find_close_order(self, client_order_id):
+        return None
 
     def position(self):
         return self._position
@@ -172,8 +175,8 @@ def test_position_monitor_closes_existing_long_at_stop(tmp_path):
         def __init__(self):
             super().__init__({"entry": 101, "stop": 99, "target": 106, "quantity": 100})
 
-        def close_long(self, *, time, price):
-            return CloseReceipt("close-1", time, price, 100)
+        def close_long(self, *, time, price, client_order_id=""):
+            return CloseReceipt("close-1", time, price, 100, client_order_id)
 
     ledger = TradeLedger(tmp_path / "ledger.jsonl")
     now = datetime(2026, 1, 2, 9, tzinfo=timezone.utc)
@@ -196,8 +199,8 @@ def test_position_monitor_closes_at_session_end(tmp_path):
         def __init__(self):
             super().__init__({"entry": 101, "stop": 99, "target": 106, "quantity": 100})
 
-        def close_long(self, *, time, price):
-            return CloseReceipt("close-2", time, price, 100)
+        def close_long(self, *, time, price, client_order_id=""):
+            return CloseReceipt("close-2", time, price, 100, client_order_id)
 
     ledger = TradeLedger(tmp_path / "ledger.jsonl")
     now = datetime(2026, 1, 2, 15, 29, tzinfo=timezone.utc)
@@ -222,3 +225,46 @@ def test_restart_restores_persisted_kill_switch(tmp_path):
     coordinator.reconcile_startup()
     assert coordinator.halted
     assert coordinator.recover_pending_buy() is None
+
+
+def test_position_monitor_persists_close_intent_before_broker_call(tmp_path):
+    from wickhunter.position import LongPositionMonitor
+
+    class PositionExecution(FakeExecution):
+        def __init__(self):
+            super().__init__({"entry": 101, "stop": 99, "target": 106, "quantity": 100})
+        def close_long(self, *, time, price, client_order_id=""):
+            assert ledger.snapshot()["pending_close"]["client_order_id"] == client_order_id
+            return CloseReceipt("close-3", time, price, 100, client_order_id)
+
+    ledger = TradeLedger(tmp_path / "ledger.jsonl")
+    now = datetime(2026, 1, 2, 9, tzinfo=timezone.utc)
+    ledger.append("BUY_FILLED", time=now, order_id="buy-1", client_order_id="c",
+                  entry=101, stop=99, target=106, quantity=100)
+    monitor = LongPositionMonitor(execution=PositionExecution(), ledger=ledger)
+    assert monitor.reconcile().safe_to_buy
+    assert monitor.on_price(time=now, price=106, stop=99, target=106) is not None
+    assert ledger.snapshot()["pending_close"] is None
+
+
+def test_position_monitor_recovers_broker_accepted_close_without_duplicate(tmp_path):
+    from wickhunter.position import LongPositionMonitor
+
+    ledger = TradeLedger(tmp_path / "ledger.jsonl")
+    now = datetime(2026, 1, 2, 9, tzinfo=timezone.utc)
+    ledger.append("BUY_FILLED", time=now, order_id="buy-1", client_order_id="c",
+                  entry=101, stop=99, target=106, quantity=100)
+    ledger.append("LONG_CLOSE_INTENT", time=now, client_order_id="wh-close-expected",
+                  result="WIN", trigger=106)
+
+    class AcceptedClose(FakeExecution):
+        def __init__(self):
+            super().__init__({"entry": 101, "stop": 99, "target": 106, "quantity": 100})
+        def find_close_order(self, client_order_id):
+            return CloseReceipt("close-accepted", now, 106, 100, client_order_id)
+
+    monitor = LongPositionMonitor(execution=AcceptedClose(), ledger=ledger)
+    assert monitor.reconcile().safe_to_buy
+    monitor.position_snapshot["order_id"] = "buy-1"
+    assert monitor.on_price(time=now, price=106, stop=99, target=106) is not None
+    assert ledger.snapshot()["pending_close"] is None

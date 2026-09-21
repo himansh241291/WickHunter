@@ -12,6 +12,7 @@ from .models import Candle
 from .ports import BuyExecutionPort, BuyOrder, OrderReceipt
 from .reconcile import Reconciliation, reconcile_long_position
 from .risk import BuyRiskGuard, RiskLimits, RiskState
+from .safety import KillSwitch
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class BuyCoordinator:
         risk_limits: RiskLimits | None = None,
         engine_config: EngineConfig | None = None,
         ledger: TradeLedger | None = None,
+        kill_switch: KillSwitch | None = None,
     ) -> None:
         self.engine = WickHunterEngine(pdl, pdh, engine_config)
         self.execution = execution
@@ -48,16 +50,19 @@ class BuyCoordinator:
         self.risk_guard = BuyRiskGuard(risk_limits)
         self.risk_fraction = risk_fraction
         self.ledger = ledger
+        self.kill_switch = kill_switch
         if not 0 < risk_fraction <= self.risk_guard.limits.max_risk_fraction:
             raise ValueError("risk_fraction exceeds configured BUY risk limit")
         self.armed: ArmedBuy | None = None
         self.receipt: OrderReceipt | None = None
         self.reconciliation: Reconciliation | None = None
-        self.halted = False
+        self.halted = bool(kill_switch and kill_switch.is_halted())
 
     def reconcile_startup(self) -> Reconciliation:
         """Fail closed unless ledger and broker agree on the open long."""
-        snapshot = self.ledger.snapshot() if self.ledger else {"open_position": None}
+        snapshot = self.ledger.snapshot() if self.ledger else {"open_position": None, "halted": False}
+        if snapshot.get("halted"):
+            self.halted = True
         result = reconcile_long_position(snapshot["open_position"], self.execution.position())
         self.reconciliation = result
         if not result.safe_to_buy:
@@ -67,7 +72,7 @@ class BuyCoordinator:
 
     def recover_pending_buy(self) -> ArmedBuy | None:
         """Restore an unfilled BUY intent after restart without creating a new ID."""
-        if self.ledger is None:
+        if self.ledger is None or self.halted:
             return None
         snapshot = self.ledger.snapshot()
         pending = snapshot.get("pending_buy")

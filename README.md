@@ -169,6 +169,21 @@ Backtest execution-cost controls:
 
 The CLI writes JSON and CSV reports containing metrics, trades, rejections, audit events, and walk-forward train/test results where requested.
 
+## Groww integration
+
+WickHunter now includes a broker-neutral Groww adapter. It uses Groww's official Python SDK for API-key/secret authentication, order placement, order lookup, and position reconciliation. Groww's API-key/secret flow requires daily approval on the Groww Cloud API Keys page; the generated access token is used by the SDK. citeturn3search2turn1search0
+
+Never commit the API key or secret. Configure them as environment variables on the machine running WickHunter:
+
+```powershell
+$env:GROWW_API_KEY="your-api-key"
+$env:GROWW_API_SECRET="your-api-secret"
+```
+
+The adapter is intentionally not wired to automatic live execution by default. First validate authentication, account permissions, instrument mapping, order lookup, and position reconciliation in a controlled environment.
+
+Groww provides real-time LTP/feed APIs and order/position APIs that can support the next runtime layer. citeturn2search0turn3search0
+
 ## Live runtime safety
 
 The broker-neutral live layer uses the same strategy/risk primitives and does not require a broker SDK. LiveRuntime performs durable startup recovery, kill-switch recovery, broker/ledger position reconciliation, pending BUY recovery by stable client ID, and pending long-close recovery. FeedHealth provides a stale-market-data guard that fails closed for **new BUYs**. Existing long protection remains based on the broker-submitted stop/target.

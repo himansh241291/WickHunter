@@ -38,6 +38,31 @@ class LongPositionMonitor:
             self.halted = True
         return result
 
+    def recover_pending_close(self) -> CloseReceipt | None:
+        """Finalize a broker-accepted close recorded before a process crash."""
+        if self.halted or self.closed or self.ledger is None:
+            return None
+        pending = self.ledger.snapshot().get("pending_close")
+        if pending is None:
+            return None
+        if self.position_snapshot is None:
+            result = self.reconcile()
+            if not result.safe_to_buy:
+                return None
+        result = str(pending.get("result", ""))
+        client_order_id = str(pending.get("client_order_id", ""))
+        if result not in {"LOSS", "WIN", "SESSION_END"} or not client_order_id:
+            self.halted = True
+            return None
+        if self._close_client_order_id(result) != client_order_id:
+            self.halted = True
+            return None
+        receipt = self.execution.find_close_order(client_order_id)
+        if receipt is None:
+            return None
+        self._record_close(receipt, result)
+        return receipt
+
     def on_price(
         self,
         *,

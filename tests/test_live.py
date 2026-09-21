@@ -168,6 +168,9 @@ def test_position_monitor_closes_existing_long_at_stop(tmp_path):
     from wickhunter.position import LongPositionMonitor
 
     class PositionExecution(FakeExecution):
+        def __init__(self):
+            super().__init__({"entry": 101, "stop": 99, "target": 106, "quantity": 100})
+
         def close_long(self, *, time, price):
             return CloseReceipt("close-1", time, price, 100)
 
@@ -189,6 +192,9 @@ def test_position_monitor_closes_at_session_end(tmp_path):
     from wickhunter.position import LongPositionMonitor
 
     class PositionExecution(FakeExecution):
+        def __init__(self):
+            super().__init__({"entry": 101, "stop": 99, "target": 106, "quantity": 100})
+
         def close_long(self, *, time, price):
             return CloseReceipt("close-2", time, price, 100)
 

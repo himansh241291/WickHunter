@@ -27,6 +27,14 @@ class OrderReceipt:
     client_order_id: str = ""
 
 
+@dataclass(frozen=True)
+class CloseReceipt:
+    order_id: str
+    time: datetime
+    fill_price: float
+    quantity: float
+
+
 class MarketDataPort(Protocol):
     def ticks(self):
         """Yield timezone-aware ordered Tick objects."""
@@ -44,7 +52,7 @@ class BuyExecutionPort(Protocol):
         """Return an accepted/fill receipt for an existing client ID."""
         ...
 
-    def close_long(self, *, time: datetime, price: float) -> None:
+    def close_long(self, *, time: datetime, price: float) -> CloseReceipt:
         """Close an already-open long position for lifecycle management."""
         ...
 

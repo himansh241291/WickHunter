@@ -58,6 +58,7 @@ class TradeLedger:
         """Recover latest lifecycle facts without mutating the ledger."""
         position: dict[str, Any] | None = None
         pending_buy: dict[str, Any] | None = None
+        pending_close: dict[str, Any] | None = None
         halted = False
         for item in self.events():
             if item.event == "BUY_INTENT":
@@ -67,7 +68,13 @@ class TradeLedger:
                 position = {"entry_time": item.time.isoformat(), **item.data}
             elif item.event in {"BUY_EXPIRED", "BUY_CANCELLED"}:
                 pending_buy = None
-            elif item.event in {"POSITION_CLOSED", "SESSION_END"}:
+            elif item.event == "SESSION_END":
+                pending_close = None
+                position = None
+            elif item.event == "LONG_CLOSE_INTENT":
+                pending_close = {"time": item.time.isoformat(), **item.data}
+            elif item.event == "POSITION_CLOSED":
+                pending_close = None
                 position = None
             elif item.event == "KILL_SWITCH_ON":
                 halted = True
@@ -76,5 +83,6 @@ class TradeLedger:
         return {
             "open_position": position,
             "pending_buy": pending_buy,
+            "pending_close": pending_close,
             "halted": halted,
         }

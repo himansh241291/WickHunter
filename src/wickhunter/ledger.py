@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -40,7 +40,10 @@ class TradeLedger:
                     continue
                 try:
                     raw = json.loads(line)
-                    result.append(LedgerEvent(datetime.fromisoformat(raw["time"]), raw["event"], raw.get("data", {})))
+                    event_time = datetime.fromisoformat(raw["time"])
+                    if event_time.tzinfo is None or event_time.utcoffset() is None:
+                        raise ValueError("ledger timestamp must be timezone-aware")
+                    result.append(LedgerEvent(event_time, raw["event"], raw.get("data", {})))
                 except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                     raise ValueError(f"invalid ledger record at line {line_no}") from exc
         return result
@@ -52,16 +55,26 @@ class TradeLedger:
         return items[-1] if items else None
 
     def snapshot(self) -> dict[str, Any]:
-        """Recover the latest lifecycle facts without mutating the ledger."""
+        """Recover latest lifecycle facts without mutating the ledger."""
         position: dict[str, Any] | None = None
+        pending_buy: dict[str, Any] | None = None
         halted = False
         for item in self.events():
-            if item.event == "BUY_FILLED":
+            if item.event == "BUY_INTENT":
+                pending_buy = {"time": item.time.isoformat(), **item.data}
+            elif item.event == "BUY_FILLED":
+                pending_buy = None
                 position = {"entry_time": item.time.isoformat(), **item.data}
+            elif item.event in {"BUY_EXPIRED", "BUY_CANCELLED"}:
+                pending_buy = None
             elif item.event in {"POSITION_CLOSED", "SESSION_END"}:
                 position = None
             elif item.event == "KILL_SWITCH_ON":
                 halted = True
             elif item.event == "KILL_SWITCH_OFF":
                 halted = False
-        return {"open_position": position, "halted": halted}
+        return {
+            "open_position": position,
+            "pending_buy": pending_buy,
+            "halted": halted,
+        }

@@ -171,7 +171,7 @@ The CLI writes JSON and CSV reports containing metrics, trades, rejections, audi
 
 ## Groww integration
 
-WickHunter now includes a broker-neutral Groww adapter. It uses Groww's official Python SDK for API-key/secret authentication, order placement, order lookup, and position reconciliation. Groww's API-key/secret flow requires daily approval on the Groww Cloud API Keys page; the generated access token is used by the SDK. citeturn3search2turn1search0
+WickHunter now includes a broker-neutral Groww adapter. It uses Groww's official Python SDK for API-key/secret authentication, order placement, order lookup, and position reconciliation. Groww's API-key/secret flow requires daily approval on the Groww Cloud API Keys page; the generated access token is used by the SDK.
 
 Never commit the API key or secret. Configure them as environment variables on the machine running WickHunter:
 
@@ -182,7 +182,7 @@ $env:GROWW_API_SECRET="your-api-secret"
 
 The adapter is intentionally not wired to automatic live execution by default. First validate authentication, account permissions, instrument mapping, order lookup, and position reconciliation in a controlled environment.
 
-Groww provides real-time LTP/feed APIs and order/position APIs that can support the next runtime layer. citeturn2search0turn3search0
+Groww provides real-time LTP/feed APIs and order/position APIs that can support the next runtime layer.
 
 ## Live runtime safety
 

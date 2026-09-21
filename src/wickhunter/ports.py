@@ -1,9 +1,4 @@
-"""Broker-neutral BUY execution ports.
-
-The strategy never knows broker credentials or transport details. Order
-submission is idempotent through a stable client_order_id. There is no
-SELL/short entry port.
-"""
+"""Broker-neutral BUY execution ports."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,8 +10,6 @@ from .tick import Tick
 
 @dataclass(frozen=True)
 class BuyOrder:
-    """A fully specified BUY order request with a stable idempotency key."""
-
     time: datetime
     quantity: float
     trigger: float
@@ -27,8 +20,6 @@ class BuyOrder:
 
 @dataclass(frozen=True)
 class OrderReceipt:
-    """Broker acknowledgement for a BUY order."""
-
     order_id: str
     time: datetime
     fill_price: float
@@ -47,6 +38,10 @@ class BuyExecutionPort(Protocol):
 
     def submit_buy(self, order: BuyOrder) -> OrderReceipt:
         """Submit idempotently by client_order_id."""
+        ...
+
+    def find_buy_order(self, client_order_id: str) -> OrderReceipt | None:
+        """Return an accepted/fill receipt for an existing client ID."""
         ...
 
     def close_long(self, *, time: datetime, price: float) -> None:

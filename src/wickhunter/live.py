@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from .engine import EngineConfig, State, WickHunterEngine
+from .heartbeat import FeedHealth
 from .ledger import TradeLedger
 from .models import Candle
 from .ports import BuyExecutionPort, BuyOrder, OrderReceipt
@@ -43,6 +44,7 @@ class BuyCoordinator:
         engine_config: EngineConfig | None = None,
         ledger: TradeLedger | None = None,
         kill_switch: KillSwitch | None = None,
+        feed_health: FeedHealth | None = None,
     ) -> None:
         self.engine = WickHunterEngine(pdl, pdh, engine_config)
         self.execution = execution
@@ -56,6 +58,7 @@ class BuyCoordinator:
         self.armed: ArmedBuy | None = None
         self.receipt: OrderReceipt | None = None
         self.reconciliation: Reconciliation | None = None
+        self.feed_health = feed_health
         self.halted = bool(kill_switch and kill_switch.is_halted())
 
     def reconcile_startup(self) -> Reconciliation:
@@ -69,6 +72,18 @@ class BuyCoordinator:
             self.halted = True
             self.engine.state = State.DONE
         return result
+
+    def on_heartbeat(self, now: datetime) -> bool:
+        """Gate new BUY activity when market data becomes stale."""
+        if self.feed_health is None:
+            return not self.halted
+        healthy = self.feed_health.allow_buy(now)
+        if not healthy:
+            self.halted = True
+            self.engine.state = State.DONE
+            if self.kill_switch is not None and not self.kill_switch.is_halted():
+                self.kill_switch.engage(time=now, reason=self.feed_health.reason or "market_data_unhealthy")
+        return healthy and not self.halted
 
     def recover_pending_buy(self) -> ArmedBuy | None:
         """Restore an unfilled BUY intent after restart without creating a new ID."""

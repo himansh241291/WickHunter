@@ -6,6 +6,7 @@ from wickhunter.live import BuyCoordinator, buy_client_order_id
 from wickhunter.models import Candle
 from wickhunter.ports import BuyOrder, CloseReceipt, OrderReceipt
 from wickhunter.risk import RiskState
+from wickhunter.safety import KillSwitch
 
 
 class FakeExecution:
@@ -211,3 +212,13 @@ def test_position_monitor_closes_at_session_end(tmp_path):
     assert receipt is not None
     assert receipt.fill_price == 104
     assert ledger.snapshot()["open_position"] is None
+
+
+def test_restart_restores_persisted_kill_switch(tmp_path):
+    ledger = TradeLedger(tmp_path / "ledger.jsonl")
+    now = datetime(2026, 1, 2, 9, tzinfo=timezone.utc)
+    KillSwitch(ledger).engage(time=now, reason="stale_feed")
+    coordinator = make_coordinator(ledger=ledger)
+    coordinator.reconcile_startup()
+    assert coordinator.halted
+    assert coordinator.recover_pending_buy() is None

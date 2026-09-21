@@ -4,12 +4,20 @@ WickHunter separates strategy decisions from broker execution. The live runtime 
 
 ## Startup
 
+The LiveRuntime startup sequence is deliberately fail-closed:
+
 1. Open the ledger.
 2. Validate every ledger record; corruption is a hard stop.
-3. Recover the open BUY position and risk state.
-4. If an open BUY exists, restore it and do not submit another BUY.
-5. Recover the kill-switch state.
-6. Only then start consuming market data.
+3. Recover risk state from the durable event history.
+4. Recover the kill-switch state.
+5. Reconcile the ledger's long position with the broker.
+6. Recover a pending BUY by its stable client order ID; never create a replacement ID.
+7. If an existing long is present, reconcile the position monitor.
+8. Recover a pending long-close by its stable client order ID.
+9. Require a healthy market-data heartbeat before enabling new BUY activity.
+10. Only then process M1 candles and eligible ticks.
+
+A stale market-data heartbeat halts **new BUY submissions**. Existing long protection remains broker-side through the submitted stop/target; the heartbeat does not invent a discretionary exit.
 
 ## Duplicate-order protection
 
@@ -27,6 +35,10 @@ A broker adapter should reconcile its actual long position against the durable l
 
 No SELL/short strategy path is defined by this project.
 
+
+## Market-data heartbeat
+
+FeedHealth tracks strictly increasing timezone-aware ticks. A runtime heartbeat must call heartbeat(now) periodically. If no fresh tick is available within the configured maximum age, the runtime enters a fail-closed state and persists the kill switch. A later fresh feed does not silently release that persistent kill switch; explicit operator release is required.
 
 ## Existing-position lifecycle
 

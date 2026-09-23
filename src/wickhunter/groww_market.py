@@ -46,8 +46,9 @@ class GrowwMarketData:
             segment=self.segment,
             exchange_trading_symbols=(f"{self.exchange}_{self.trading_symbol}",),
         )
+        payload = response.get("payload", response) if isinstance(response, dict) else response
         key = f"{self.exchange}_{self.trading_symbol}"
-        value = response.get(key) if isinstance(response, dict) else None
+        value = payload.get(key) if isinstance(payload, dict) else None
         if value is None:
             raise RuntimeError(f"Groww LTP response has no {key}")
         return float(value)
@@ -67,7 +68,8 @@ class GrowwMarketData:
         start_time: str,
         end_time: str,
     ) -> list[list[Any]]:
-        groww_symbol = f"{self.exchange}-{self.trading_symbol}"
+        instrument = self.instrument()
+        groww_symbol = str(instrument.get("groww_symbol") or f"{self.exchange}-{self.trading_symbol}")
         response = self.api.get_historical_candles(
             exchange=self.exchange,
             segment=self.segment,

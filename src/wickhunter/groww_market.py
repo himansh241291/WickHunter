@@ -1,6 +1,11 @@
-"""Read-only Groww market-data adapter."""
+"""Read-only Groww market-data adapter.
+
+Groww's Live Data REST endpoints require the appropriate Trading API
+subscription/permissions. Authentication alone is not sufficient.
+"""
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -26,8 +31,8 @@ class GrowwMarketData:
     @staticmethod
     def _build_api() -> Any:
         load_local_env()
-        api_key = __import__("os").environ.get("GROWW_API_KEY")
-        secret = __import__("os").environ.get("GROWW_API_SECRET")
+        api_key = os.environ.get("GROWW_API_KEY")
+        secret = os.environ.get("GROWW_API_SECRET")
         if not api_key or not secret:
             raise RuntimeError("GROWW_API_KEY and GROWW_API_SECRET are required")
         from growwapi import GrowwAPI
@@ -38,17 +43,16 @@ class GrowwMarketData:
             exchange=self.exchange,
             trading_symbol=self.trading_symbol,
         )
-        payload = response.get("payload", response) if isinstance(response, dict) else response
-        return payload if isinstance(payload, dict) else {}
+        return self._payload(response)
 
     def ltp(self) -> float:
         response = self.api.get_ltp(
             segment=self.segment,
             exchange_trading_symbols=(f"{self.exchange}_{self.trading_symbol}",),
         )
-        payload = response.get("payload", response) if isinstance(response, dict) else response
+        payload = self._payload(response)
         key = f"{self.exchange}_{self.trading_symbol}"
-        value = payload.get(key) if isinstance(payload, dict) else None
+        value = payload.get(key)
         if value is None:
             raise RuntimeError(f"Groww LTP response has no {key}")
         return float(value)
@@ -59,17 +63,13 @@ class GrowwMarketData:
             segment=self.segment,
             trading_symbol=self.trading_symbol,
         )
-        payload = response.get("payload", response) if isinstance(response, dict) else response
-        return payload if isinstance(payload, dict) else {}
+        return self._payload(response)
 
-    def historical_m1(
-        self,
-        *,
-        start_time: str,
-        end_time: str,
-    ) -> list[list[Any]]:
+    def historical_m1(self, *, start_time: str, end_time: str) -> list[list[Any]]:
         instrument = self.instrument()
-        groww_symbol = str(instrument.get("groww_symbol") or f"{self.exchange}-{self.trading_symbol}")
+        groww_symbol = str(
+            instrument.get("groww_symbol") or f"{self.exchange}-{self.trading_symbol}"
+        )
         response = self.api.get_historical_candles(
             exchange=self.exchange,
             segment=self.segment,
@@ -78,13 +78,18 @@ class GrowwMarketData:
             end_time=end_time,
             candle_interval=self.api.CANDLE_INTERVAL_MIN_1,
         )
-        payload = response.get("payload", response) if isinstance(response, dict) else response
-        if not isinstance(payload, dict):
-            raise RuntimeError("Groww historical candle response is not an object")
+        payload = self._payload(response)
         candles = payload.get("candles", [])
         if not isinstance(candles, list):
             raise RuntimeError("Groww historical candle response has invalid candles")
         return candles
+
+    @staticmethod
+    def _payload(response: Any) -> dict[str, Any]:
+        if not isinstance(response, dict):
+            return {}
+        payload = response.get("payload", response)
+        return payload if isinstance(payload, dict) else {}
 
     @staticmethod
     def candle_timestamp(value: str) -> datetime:

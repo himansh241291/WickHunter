@@ -10,6 +10,7 @@ import os
 from datetime import datetime
 from typing import Any
 
+from .env import load_local_env
 from .ports import BuyOrder, CloseReceipt, OrderReceipt
 
 
@@ -41,6 +42,7 @@ class GrowwExecution:
 
     @staticmethod
     def _build_api() -> Any:
+        load_local_env()
         api_key = os.environ.get("GROWW_API_KEY")
         secret = os.environ.get("GROWW_API_SECRET")
         if not api_key or not secret:

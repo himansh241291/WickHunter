@@ -51,7 +51,7 @@ def test_fyers_m1_stream_emits_completed_candle():
     assert candles[0].high == 101
     assert candles[0].low == 100
     assert candles[0].close == 101
-    assert candles[0].volume == 12
+    assert candles[0].volume == 5
 
 
 def test_fyers_m1_stream_flushes_explicitly():

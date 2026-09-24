@@ -63,3 +63,7 @@ class FyersDataStream:
             on_message=on_message,
         )
         self.socket.connect()
+
+    def close(self) -> None:
+        if self.socket is not None and hasattr(self.socket, "close_connection"):
+            self.socket.close_connection()

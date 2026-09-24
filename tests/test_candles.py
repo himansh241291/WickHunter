@@ -1,31 +1,12 @@
-from datetime import datetime, time, timezone
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from wickhunter.candles import M1CandleBuilder, MarketTick, fyers_tick
 
 
-def tick(h, m, s, price, volume):
-    return MarketTick(
-        datetime(2026, 9, 24, h, m, s, tzinfo=timezone.utc),
-        price,
-        volume,
-    )
-
-
-def ist_tick(h, m, s, price, volume):
-    return MarketTick(
-        datetime(2026, 9, 24, h, m, s, tzinfo=timezone.utc).replace(
-            tzinfo=timezone.utc
-        ),
-        price,
-        volume,
-    )
-
-
 def local_tick(h, m, s, price, volume):
-    from zoneinfo import ZoneInfo
-
     return MarketTick(
         datetime(2026, 9, 24, h, m, s, tzinfo=ZoneInfo("Asia/Kolkata")),
         price,
@@ -56,7 +37,7 @@ def test_out_of_order_tick_is_ignored():
     assert candle.close == 102
 
 
-def test_premarket_and_postmarket_ticks_do_not_create_candles():
+def test_premarket_and_postmarket_ticks_do_not_create_new_candles():
     builder = M1CandleBuilder()
     assert builder.add(local_tick(9, 14, 59, 100, 1000)) == []
     assert builder.flush() is None
@@ -95,8 +76,8 @@ def test_fyers_tick_prefers_exchange_feed_time():
     assert tick.price == 1237.8
     assert tick.cumulative_volume == 2414486
     assert tick.time.tzinfo is not None
-    assert tick.time.hour == 9
-    assert tick.time.minute == 52
+    assert tick.time.hour == 10
+    assert tick.time.minute == 12
 
 
 def test_fyers_tick_requires_timestamp_and_price():

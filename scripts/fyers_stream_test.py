@@ -34,8 +34,6 @@ try:
     if not done.wait(timeout=30):
         raise SystemExit("Timed out waiting for 5 FYERS market-data ticks")
 finally:
-    socket = stream.socket
-    if socket is not None and hasattr(socket, "close_connection"):
-        socket.close_connection()
+    stream.close()
 
 print(f"Received {len(ticks)} market-data ticks; smoke test complete.")

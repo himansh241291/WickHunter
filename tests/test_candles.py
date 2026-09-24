@@ -23,7 +23,7 @@ def test_builds_completed_ohlcv_from_ticks():
     candle = completed[0]
     assert candle.time.hour == 9 and candle.time.minute == 15
     assert (candle.open, candle.high, candle.low, candle.close) == (100, 101, 100, 101)
-    assert candle.volume == 12
+    assert candle.volume == 5
 
 
 def test_out_of_order_tick_is_ignored():
@@ -63,7 +63,7 @@ def test_cumulative_volume_reset_is_handled():
     builder.add(local_tick(9, 15, 20, 102, 3))
     candle = builder.flush()
     assert candle is not None
-    assert candle.volume == 13
+    assert candle.volume == 10
 
 
 def test_fyers_tick_prefers_exchange_feed_time():

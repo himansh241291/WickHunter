@@ -98,11 +98,13 @@ class M1CandleBuilder:
             return self._advance_outside_session(local)
         if self._last_time is not None and local < self._last_time:
             return []
+
         minute = local.replace(second=0, microsecond=0)
         completed: list[M1Candle] = []
         if self._minute is not None and minute > self._minute:
             completed.append(self._emit())
             self._reset_minute()
+
         if self._minute is None:
             self._minute = minute
             self._open = tick.price
@@ -113,7 +115,16 @@ class M1CandleBuilder:
             self._high = max(self._high, tick.price)
             self._low = min(self._low, tick.price)
             self._close = tick.price
-        self._volume += self._volume_delta(tick.cumulative_volume)
+
+        if tick.cumulative_volume is not None:
+            if self._last_cumulative_volume is None:
+                self._last_cumulative_volume = tick.cumulative_volume
+            else:
+                delta = tick.cumulative_volume - self._last_cumulative_volume
+                self._last_cumulative_volume = tick.cumulative_volume
+                if delta >= 0:
+                    self._volume += delta
+
         self._last_time = local
         return completed
 
@@ -136,16 +147,6 @@ class M1CandleBuilder:
 
     def _in_session(self, local: datetime) -> bool:
         return self.session_start <= local.time() < self.session_end
-
-    def _volume_delta(self, cumulative: int | None) -> int:
-        if cumulative is None:
-            return 0
-        if self._last_cumulative_volume is None:
-            self._last_cumulative_volume = cumulative
-            return 0
-        delta = cumulative - self._last_cumulative_volume
-        self._last_cumulative_volume = cumulative
-        return delta if delta >= 0 else cumulative
 
     def _emit(self) -> M1Candle:
         assert self._minute is not None

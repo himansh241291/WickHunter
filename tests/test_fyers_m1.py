@@ -65,7 +65,7 @@ def test_tick_callback_receives_normalized_ticks_after_candle_rollover():
     stream.connect()
     stream.stream.on_tick(fyers_message(9, 15, 1, 100, 1000))
     stream.stream.on_tick(fyers_message(9, 16, 0, 101, 1005))
-    assert events == [("candle", 15), ("tick", 16, 101.0)]
+    assert events == [("tick", 15, 100.0), ("candle", 15), ("tick", 16, 101.0)]
 
 
 def test_fyers_m1_stream_flushes_explicitly():

@@ -169,6 +169,24 @@ Backtest execution-cost controls:
 
 The CLI writes JSON and CSV reports containing metrics, trades, rejections, audit events, and walk-forward train/test results where requested.
 
+## FYERS streaming paper pipeline
+
+The read-only FYERS WebSocket adapter can now feed both normalized market ticks and completed M1 candles into `FyersPaperPipeline`. The paper pipeline arms the SignalHigh trigger after the completed signal candle, only fills from an observed tick during the immediate next M1 minute, applies the existing `PaperBroker` risk/execution model, and writes lifecycle events to the durable JSONL ledger. It processes stop/target exits from subsequent ticks, liquidates at the final completed NSE session candle, expires untriggered intents, and has a stale-feed kill-switch check. The stream adapter deliberately delivers a completed candle before the first tick of the next minute so the next-minute trigger is armed in time.
+
+Run the pipeline in paper-only mode from WSL after FYERS credentials are configured in the existing local `.env` or `.fyers_token` file:
+
+```bash
+source .venv/bin/activate
+python3 scripts/fyers_paper.py \\
+  --symbol NSE:RELIANCE-EQ \\
+  --pdl <previous-session-low> \\
+  --pdh <previous-session-high> \\
+  --timezone Asia/Kolkata \\
+  --ledger reports/fyers-paper-ledger.jsonl
+```
+
+Replace the two level placeholders with verified values from the previous completed trading session. The runner restores risk counters and paper position/pending-intent state from the ledger before connecting. Keep the ledger path stable across restarts. If stale-feed protection engages the persistent kill switch, receiving fresh ticks does not automatically release it; release must be an explicit, deliberate operation. This script does not invoke Groww or FYERS order-placement APIs and must not be treated as a live-trading runner.
+
 ## Groww integration
 
 WickHunter now includes a broker-neutral Groww adapter. It uses Groww's official Python SDK for API-key/secret authentication, order placement, order lookup, and position reconciliation. Groww's API-key/secret flow requires daily approval on the Groww Cloud API Keys page; the generated access token is used by the SDK.

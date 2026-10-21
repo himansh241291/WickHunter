@@ -120,6 +120,12 @@ class FyersPaperPipeline:
 
     def on_candle(self, candle: M1Candle) -> None:
         local = candle.time.astimezone(self.zone)
+        print(
+            f"M1 CLOSED {local.isoformat()} | O={candle.open:.2f} H={candle.high:.2f} "
+            f"L={candle.low:.2f} C={candle.close:.2f} V={candle.volume} "
+            f"| PDL={self.pdl:.2f} PDH={self.pdh:.2f}",
+            flush=True,
+        )
         if self.session_date != local.date():
             self._start_session(local.date(), candle.time)
         self.session_high = candle.high if self.session_high is None else max(self.session_high, candle.high)

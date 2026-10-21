@@ -88,7 +88,10 @@ def main() -> int:
     print("No broker order API is invoked by this script. Ctrl+C stops the stream.")
     try:
         while not stop.wait(1.0):
-            pipeline.heartbeat(datetime.now(zone))
+            # Give the initial WebSocket connection time to deliver its first tick;
+            # once data has started, stale-feed checks run every second.
+            if pipeline.last_tick_time is not None:
+                pipeline.heartbeat(datetime.now(zone))
             if failure:
                 raise RuntimeError("FYERS market-data stream failed") from failure[0]
     except KeyboardInterrupt:

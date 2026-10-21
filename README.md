@@ -179,13 +179,13 @@ Run the pipeline in paper-only mode from WSL after FYERS credentials are configu
 source .venv/bin/activate
 python3 scripts/fyers_paper.py \\
   --symbol NSE:RELIANCE-EQ \\
-  --pdl <previous-session-low> \\
-  --pdh <previous-session-high> \\
+  --pdl 123.45 \\
+  --pdh 130.00 \\
   --timezone Asia/Kolkata \\
   --ledger reports/fyers-paper-ledger.jsonl
 ```
 
-Replace the two level placeholders with verified values from the previous completed trading session. The runner restores risk counters and paper position/pending-intent state from the ledger before connecting. Keep the ledger path stable across restarts. If stale-feed protection engages the persistent kill switch, receiving fresh ticks does not automatically release it; release must be an explicit, deliberate operation. This script does not invoke Groww or FYERS order-placement APIs and must not be treated as a live-trading runner.
+The numbers above are examples only; replace them with verified values from the previous completed trading session. The runner restores risk counters and paper position/pending-intent state from the ledger before connecting. Keep the ledger path stable across restarts. If stale-feed protection engages the persistent kill switch, receiving fresh ticks does not automatically release it; release must be an explicit, deliberate operation. This script does not invoke Groww or FYERS order-placement APIs and must not be treated as a live-trading runner.
 
 ## Groww integration
 

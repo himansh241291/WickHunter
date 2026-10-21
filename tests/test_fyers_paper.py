@@ -36,6 +36,47 @@ def arm_pipeline(pipeline):
     assert pipeline.armed.order_time == at(9, 17)
 
 
+class FakeStream:
+    def __init__(self, *, symbol, on_tick):
+        self.symbol = symbol
+        self.on_tick = on_tick
+
+    def connect(self):
+        pass
+
+    def close(self):
+        pass
+
+
+def fyers_message(timestamp, price, volume):
+    return {
+        "type": "sf", "symbol": "NSE:RELIANCE-EQ", "ltp": price,
+        "exch_feed_time": timestamp.timestamp(), "vol_traded_today": volume,
+    }
+
+
+def test_fyers_stream_to_strategy_to_paper_fill_end_to_end(tmp_path):
+    pipeline, ledger, broker = make_pipeline(tmp_path)
+    pipeline.stream.stream_factory = FakeStream
+    pipeline.connect()
+    emit = pipeline.stream.stream.on_tick
+    emit(fyers_message(at(9, 15, 1), 99.0, 1000))
+    emit(fyers_message(at(9, 15, 30), 99.5, 1005))
+    emit(fyers_message(at(9, 16, 1), 100.5, 1010))
+    emit(fyers_message(at(9, 16, 10), 99.8, 1012))
+    emit(fyers_message(at(9, 16, 30), 101.2, 1018))
+    emit(fyers_message(at(9, 16, 55), 100.8, 1020))
+    # This tick completes the signal candle first, arming the trigger before
+    # the same rollover tick is forwarded to the execution callback.
+    emit(fyers_message(at(9, 17), 100.5, 1025))
+    assert pipeline.armed is not None
+    emit(fyers_message(at(9, 17, 1), 101.2, 1027))
+    assert broker.position is not None
+    assert broker.position.entry == 101.2
+    assert pipeline.engine.state == State.POSITION_OPEN
+    assert ledger.snapshot()["open_position"] is not None
+
+
 def test_fyers_pipeline_arms_and_paper_fills_only_on_confirmation_tick(tmp_path):
     pipeline, ledger, broker = make_pipeline(tmp_path)
     arm_pipeline(pipeline)

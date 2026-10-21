@@ -54,6 +54,20 @@ def test_fyers_m1_stream_emits_completed_candle():
     assert candles[0].volume == 5
 
 
+def test_tick_callback_receives_normalized_ticks_after_candle_rollover():
+    events = []
+    stream = FyersM1Stream(
+        symbol="NSE:RELIANCE-EQ",
+        on_candle=lambda candle: events.append(("candle", candle.time.minute)),
+        on_tick=lambda tick: events.append(("tick", tick.time.minute, tick.price)),
+        stream_factory=FakeM1Stream,
+    )
+    stream.connect()
+    stream.stream.on_tick(fyers_message(9, 15, 1, 100, 1000))
+    stream.stream.on_tick(fyers_message(9, 16, 0, 101, 1005))
+    assert events == [("candle", 15), ("tick", 16, 101.0)]
+
+
 def test_fyers_m1_stream_flushes_explicitly():
     candles = []
     stream = FyersM1Stream(

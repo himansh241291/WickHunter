@@ -168,7 +168,9 @@ class FyersPaperPipeline:
             if not self.kill_switch.is_halted():
                 self.kill_switch.engage(time=tick.time, reason=self.feed_health.reason or "stale_market_data")
             return None
-        if tick.time <= self.armed.order_time:
+        # The rollover tick arrives after the completed signal candle callback,
+        # so a trigger exactly at the confirmation minute boundary is valid.
+        if tick.time < self.armed.order_time:
             return None
         if tick.time >= self.armed.expires_at:
             self._cancel_armed(tick.time, "BUY_intent_expired")

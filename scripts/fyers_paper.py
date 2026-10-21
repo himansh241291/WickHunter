@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import signal
 import threading
+import time as monotonic_time
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -86,12 +87,25 @@ def main() -> int:
     print("WickHunter FYERS pipeline started in PAPER-ONLY mode.")
     print(f"Symbol: {args.symbol} | Timezone: {args.timezone} | Ledger: {Path(args.ledger).resolve()}")
     print("No broker order API is invoked by this script. Ctrl+C stops the stream.")
+    last_status = 0.0
     try:
         while not stop.wait(1.0):
             # Give the initial WebSocket connection time to deliver its first tick;
             # once data has started, stale-feed checks run every second.
+            now = datetime.now(zone)
             if pipeline.last_tick_time is not None:
-                pipeline.heartbeat(datetime.now(zone))
+                pipeline.heartbeat(now)
+            elapsed = monotonic_time.monotonic()
+            if elapsed - last_status >= 5.0:
+                adapter = pipeline.stream.stream
+                stream_error = getattr(adapter, "last_error", None)
+                stream_closed = getattr(adapter, "closed", None)
+                if pipeline.last_tick_time is None:
+                    print(f"STATUS {now.isoformat()} | waiting for first price tick | stream_error={stream_error!r} | stream_closed={stream_closed!r}", flush=True)
+                else:
+                    age = max(0.0, (now - pipeline.last_tick_time).total_seconds())
+                    print(f"STATUS {now.isoformat()} | price={pipeline.last_tick_price} | tick_time={pipeline.last_tick_time.isoformat()} | tick_age={age:.1f}s | strategy={pipeline.engine.state.name} | armed={pipeline.armed is not None} | position={pipeline.broker.position is not None} | halted={kill_switch.is_halted()} | stream_error={stream_error!r} | stream_closed={stream_closed!r}", flush=True)
+                last_status = elapsed
             if failure:
                 raise RuntimeError("FYERS market-data stream failed") from failure[0]
     except KeyboardInterrupt:

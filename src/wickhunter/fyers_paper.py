@@ -74,6 +74,7 @@ class FyersPaperPipeline:
         self.session_low: float | None = None
         self.armed: ArmedPaperBuy | None = None
         self.last_tick_time: datetime | None = None
+        self.last_tick_price: float | None = None
         self.stream = FyersM1Stream(
             symbol=symbol, on_candle=self.on_candle, on_tick=self.on_tick,
             stream_factory=stream_factory,
@@ -126,7 +127,9 @@ class FyersPaperPipeline:
 
         # A completed confirmation minute without a tick-triggered fill expires
         # the setup. Do not let OHLC retrospectively create an entry.
-        if self.armed is not None and candle.time >= self.armed.order_time:
+        if self.kill_switch.is_halted():
+            pass
+        elif self.armed is not None and candle.time >= self.armed.order_time:
             self._cancel_armed(candle.time, "confirmation_minute_completed_without_trigger")
         elif self.broker.position is None and self.armed is None and self.engine.state not in (State.DONE, State.POSITION_OPEN):
             self.engine.on_candle(Candle(candle.time, candle.open, candle.high, candle.low, candle.close))
@@ -135,13 +138,17 @@ class FyersPaperPipeline:
 
         # NSE session closes at 15:30 IST. Use the final completed candle's
         # close as the paper liquidation reference, not a future tick.
-        if local.time() == time(15, 29) and self.broker.position is not None:
-            self.broker.close_session(time=candle.time + timedelta(minutes=1), price=candle.close)
-            self.engine.state = State.DONE
+        if local.time() == time(15, 29):
+            if self.armed is not None:
+                self._cancel_armed(candle.time + timedelta(minutes=1), "session_end")
+            if self.broker.position is not None:
+                self.broker.close_session(time=candle.time + timedelta(minutes=1), price=candle.close)
+                self.engine.state = State.DONE
 
     def on_tick(self, tick: MarketTick) -> PaperPosition | PaperClose | None:
         if self.last_tick_time is None or tick.time > self.last_tick_time:
             self.last_tick_time = tick.time
+            self.last_tick_price = tick.price
             self.feed_health.observe(tick.time)
         # Equal-timestamp price updates are useful for execution, but older
         # ticks are ignored to preserve deterministic event ordering.
@@ -227,8 +234,14 @@ class FyersPaperPipeline:
             if self.armed is not None:
                 self._cancel_armed(when, "session_boundary")
             if self.broker.position is not None:
-                self.broker.close_session(time=when, price=self.broker.position.entry)
+                if self.last_tick_price is None:
+                    self.kill_switch.engage(time=when, reason="session_rollover_without_market_price")
+                    raise RuntimeError("cannot safely paper-liquidate open position without a market price")
+                self.broker.close_session(time=when, price=self.last_tick_price)
+            self.broker.risk_state.reset_day()
         self.session_date = session_date
         self.session_high = None
         self.session_low = None
         self.engine = WickHunterEngine(self.pdl, self.pdh, self.engine_config)
+        if self.broker.position is not None:
+            self.engine.state = State.POSITION_OPEN

@@ -40,7 +40,7 @@ def test_fyers_pipeline_arms_and_paper_fills_only_on_confirmation_tick(tmp_path)
     pipeline, ledger, broker = make_pipeline(tmp_path)
     arm_pipeline(pipeline)
 
-    assert pipeline.on_tick(MarketTick(at(9, 17), 101, 1000)) is None
+    assert pipeline.on_tick(MarketTick(at(9, 17), 100.5, 1000)) is None
     assert broker.position is None
     position = pipeline.on_tick(MarketTick(at(9, 17, 1), 101, 1001))
     assert position is not None
@@ -50,6 +50,16 @@ def test_fyers_pipeline_arms_and_paper_fills_only_on_confirmation_tick(tmp_path)
     assert events.count("BUY_INTENT") == 1
     assert events.count("BUY_FILLED") == 1
     assert events.count("PAPER_BUY_ACK") == 1
+
+
+def test_first_confirmation_minute_tick_can_trigger_buy(tmp_path):
+    pipeline, ledger, broker = make_pipeline(tmp_path)
+    arm_pipeline(pipeline)
+
+    position = pipeline.on_tick(MarketTick(at(9, 17), 101, 1000))
+    assert position is not None
+    assert broker.position is not None
+    assert pipeline.engine.state == State.POSITION_OPEN
 
 
 def test_fyers_pipeline_processes_tick_stop_and_closes_ledger_position(tmp_path):
